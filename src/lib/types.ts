@@ -1,6 +1,8 @@
 export type Vehiculo = {
   placa: string;
   alias: string | null;
+  conductor: string | null;
+  propietario: string | null;
   precio_por_km: number;
   created_at: string;
 };

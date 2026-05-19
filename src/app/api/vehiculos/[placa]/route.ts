@@ -2,6 +2,12 @@ import { NextResponse } from "next/server";
 import { sql } from "@/lib/db";
 import type { Vehiculo } from "@/lib/types";
 
+function trimOrNull(v: unknown): string | null {
+  if (v == null) return null;
+  const s = String(v).trim();
+  return s ? s : null;
+}
+
 export async function PATCH(
   req: Request,
   { params }: { params: Promise<{ placa: string }> }
@@ -11,7 +17,9 @@ export async function PATCH(
   const body = await req.json();
 
   const updates: Record<string, string | number | null> = {};
-  if (body.alias !== undefined) updates.alias = body.alias ? String(body.alias) : null;
+  if (body.alias !== undefined) updates.alias = trimOrNull(body.alias);
+  if (body.conductor !== undefined) updates.conductor = trimOrNull(body.conductor);
+  if (body.propietario !== undefined) updates.propietario = trimOrNull(body.propietario);
   if (body.precio_por_km !== undefined) updates.precio_por_km = Number(body.precio_por_km);
 
   if (Object.keys(updates).length === 0) {

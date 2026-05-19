@@ -4,9 +4,12 @@
 CREATE TABLE IF NOT EXISTS vehiculos (
   placa            TEXT PRIMARY KEY,
   alias            TEXT,
+  conductor        TEXT,
+  propietario      TEXT,
   precio_por_km    DOUBLE PRECISION NOT NULL DEFAULT 0,
   created_at       TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
+CREATE INDEX IF NOT EXISTS idx_vehiculos_propietario ON vehiculos(propietario);
 
 CREATE TABLE IF NOT EXISTS registros (
   id               BIGSERIAL PRIMARY KEY,
