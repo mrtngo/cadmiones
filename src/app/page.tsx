@@ -32,6 +32,51 @@ export default function HomePage() {
   });
   const [err, setErr] = useState<string | null>(null);
 
+  // Edit inline
+  const [editingPlaca, setEditingPlaca] = useState<string | null>(null);
+  const [editForm, setEditForm] = useState({
+    alias: "",
+    conductor: "",
+    propietario: "",
+    volumen: "",
+    consorcio: "",
+  });
+  const [editErr, setEditErr] = useState<string | null>(null);
+
+  function startEdit(v: Vehiculo) {
+    setEditingPlaca(v.placa);
+    setEditErr(null);
+    setEditForm({
+      alias: v.alias ?? "",
+      conductor: v.conductor ?? "",
+      propietario: v.propietario ?? "",
+      volumen: v.volumen_m3 != null ? String(v.volumen_m3) : "",
+      consorcio: v.consorcio_actual ?? "",
+    });
+  }
+
+  async function saveEdit(placa: string) {
+    setEditErr(null);
+    const res = await fetch(`/api/vehiculos/${encodeURIComponent(placa)}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        alias: editForm.alias,
+        conductor: editForm.conductor,
+        propietario: editForm.propietario,
+        volumen_m3: editForm.volumen,
+        consorcio_actual: editForm.consorcio,
+      }),
+    });
+    if (!res.ok) {
+      const j = await res.json().catch(() => ({}));
+      setEditErr(j.error ?? "error");
+      return;
+    }
+    setEditingPlaca(null);
+    loadAll();
+  }
+
   async function loadAll() {
     const [vs, rs, as, cs] = await Promise.all([
       fetch("/api/vehiculos").then((r) => r.json()),
@@ -202,7 +247,7 @@ export default function HomePage() {
           <form onSubmit={addVehiculo} className="space-y-3">
             <div>
               <Label>Placa *</Label>
-              <input className={inputCls} value={form.placa} onChange={(e) => setForm({ ...form, placa: e.target.value })} placeholder="ABC123" required />
+              <input className={inputCls} value={form.placa} onChange={(e) => setForm({ ...form, placa: e.target.value.toUpperCase() })} placeholder="ABC123" required />
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div>
@@ -248,7 +293,42 @@ export default function HomePage() {
             <p className="text-sm text-zinc-500">Aún no hay vehículos. Agregá uno para empezar.</p>
           ) : (
             <ul className="divide-y divide-zinc-200 dark:divide-zinc-800">
-              {vehiculos.map((v) => (
+              {vehiculos.map((v) => editingPlaca === v.placa ? (
+                <li key={v.placa} className="py-3 space-y-3">
+                  <div className="flex items-baseline justify-between">
+                    <div className="font-semibold">{v.placa}</div>
+                    <span className="text-xs text-zinc-500">editando</span>
+                  </div>
+                  <div className="grid grid-cols-2 gap-2">
+                    <div>
+                      <Label>Alias</Label>
+                      <input className={inputCls} value={editForm.alias} onChange={(e) => setEditForm({ ...editForm, alias: e.target.value })} />
+                    </div>
+                    <div>
+                      <Label>Conductor</Label>
+                      <input className={inputCls} value={editForm.conductor} onChange={(e) => setEditForm({ ...editForm, conductor: e.target.value })} />
+                    </div>
+                    <div>
+                      <Label>Propietario</Label>
+                      <input className={inputCls} value={editForm.propietario} onChange={(e) => setEditForm({ ...editForm, propietario: e.target.value })} list="propietario-list" />
+                    </div>
+                    <div>
+                      <Label>Volumen (m³)</Label>
+                      <input className={inputCls} type="number" step="0.1" value={editForm.volumen} onChange={(e) => setEditForm({ ...editForm, volumen: e.target.value })} />
+                    </div>
+                    <div className="col-span-2">
+                      <Label>Consorcio actual</Label>
+                      <input className={inputCls} value={editForm.consorcio} onChange={(e) => setEditForm({ ...editForm, consorcio: e.target.value })} list="consorcio-list" />
+                      <p className="text-xs text-zinc-500 mt-1">Solo afecta viajes nuevos. Los viejos conservan su consorcio histórico.</p>
+                    </div>
+                  </div>
+                  {editErr ? <div className="text-sm text-red-600">{editErr}</div> : null}
+                  <div className="flex gap-2">
+                    <button onClick={() => saveEdit(v.placa)} className={btnCls}>Guardar</button>
+                    <button onClick={() => setEditingPlaca(null)} className={btnGhostCls}>Cancelar</button>
+                  </div>
+                </li>
+              ) : (
                 <li key={v.placa} className="py-3 flex items-center justify-between gap-3">
                   <div className="min-w-0">
                     <div className="font-semibold">
@@ -263,6 +343,7 @@ export default function HomePage() {
                     </div>
                   </div>
                   <div className="flex gap-2 shrink-0">
+                    <button onClick={() => startEdit(v)} className={btnGhostCls}>Editar</button>
                     <Link href={`/conductor?placa=${v.placa}`} className={btnGhostCls}>Conductor</Link>
                     <Link href={`/cliente?placa=${v.placa}`} className={btnGhostCls}>Cliente</Link>
                     <button onClick={() => delVehiculo(v.placa)} className="text-xs text-red-600 hover:underline">eliminar</button>

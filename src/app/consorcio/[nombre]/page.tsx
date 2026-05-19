@@ -78,6 +78,43 @@ export default function ConsorcioPage({
     loadAll();
   }
 
+  // Edit ruta inline
+  const [editingRutaId, setEditingRutaId] = useState<number | null>(null);
+  const [editRuta, setEditRuta] = useState({ nombre: "", m3: "", facturado: "", cobrado: "" });
+  const [editRutaErr, setEditRutaErr] = useState<string | null>(null);
+
+  function startEditRuta(r: Ruta) {
+    setEditingRutaId(r.id);
+    setEditRutaErr(null);
+    setEditRuta({
+      nombre: r.nombre,
+      m3: r.m3 != null ? String(r.m3) : "",
+      facturado: String(r.precio_facturado_m3km),
+      cobrado: String(r.precio_cobrado_m3km),
+    });
+  }
+
+  async function saveEditRuta(id: number) {
+    setEditRutaErr(null);
+    const res = await fetch(`/api/rutas/${id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        nombre: editRuta.nombre,
+        m3: editRuta.m3,
+        precio_facturado_m3km: Number(editRuta.facturado || 0),
+        precio_cobrado_m3km: Number(editRuta.cobrado || 0),
+      }),
+    });
+    if (!res.ok) {
+      const j = await res.json().catch(() => ({}));
+      setEditRutaErr(j.error ?? "error");
+      return;
+    }
+    setEditingRutaId(null);
+    loadAll();
+  }
+
   const vByPlaca = useMemo(() => vehiculosByPlaca(vehiculos), [vehiculos]);
   const totales = useMemo(() => totalesRegistros(registros, vByPlaca), [registros, vByPlaca]);
   const totalAnticipos = useMemo(() => anticipos.reduce((s, a) => s + a.monto, 0), [anticipos]);
@@ -182,14 +219,36 @@ export default function ConsorcioPage({
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-zinc-200 dark:divide-zinc-800">
-                  {rutas.map((r) => (
+                  {rutas.map((r) => editingRutaId === r.id ? (
+                    <tr key={r.id} className="bg-zinc-50 dark:bg-zinc-900/50">
+                      <td className="py-2 pr-3">
+                        <input className={inputCls} value={editRuta.nombre} onChange={(e) => setEditRuta({ ...editRuta, nombre: e.target.value })} />
+                      </td>
+                      <td className="py-2 pr-3">
+                        <input className={inputCls + " text-right"} type="number" step="0.1" placeholder="por camión" value={editRuta.m3} onChange={(e) => setEditRuta({ ...editRuta, m3: e.target.value })} />
+                      </td>
+                      <td className="py-2 pr-3">
+                        <input className={inputCls + " text-right"} type="number" step="0.01" value={editRuta.facturado} onChange={(e) => setEditRuta({ ...editRuta, facturado: e.target.value })} />
+                      </td>
+                      <td className="py-2 pr-3">
+                        <input className={inputCls + " text-right"} type="number" step="0.01" value={editRuta.cobrado} onChange={(e) => setEditRuta({ ...editRuta, cobrado: e.target.value })} />
+                      </td>
+                      <td className="py-2 pr-3 text-right text-zinc-500">{money(Number(editRuta.facturado || 0) - Number(editRuta.cobrado || 0))}</td>
+                      <td className="py-2 text-right whitespace-nowrap">
+                        <button onClick={() => saveEditRuta(r.id)} className="text-xs text-emerald-600 hover:underline mr-2">guardar</button>
+                        <button onClick={() => setEditingRutaId(null)} className="text-xs text-zinc-500 hover:underline">cancelar</button>
+                        {editRutaErr ? <div className="text-xs text-red-600 mt-1">{editRutaErr}</div> : null}
+                      </td>
+                    </tr>
+                  ) : (
                     <tr key={r.id}>
                       <td className="py-2 pr-3 font-medium">{r.nombre}</td>
                       <td className="py-2 pr-3 text-right text-zinc-500">{r.m3 != null ? num(r.m3, 1) : <span className="italic">por camión</span>}</td>
                       <td className="py-2 pr-3 text-right">{money(r.precio_facturado_m3km)}</td>
                       <td className="py-2 pr-3 text-right">{money(r.precio_cobrado_m3km)}</td>
                       <td className="py-2 pr-3 text-right">{money(r.precio_facturado_m3km - r.precio_cobrado_m3km)}</td>
-                      <td className="py-2 text-right">
+                      <td className="py-2 text-right whitespace-nowrap">
+                        <button onClick={() => startEditRuta(r)} className="text-xs text-zinc-600 dark:text-zinc-400 hover:underline mr-2">editar</button>
                         <button onClick={() => delRuta(r.id)} className="text-xs text-red-600 hover:underline">eliminar</button>
                       </td>
                     </tr>
