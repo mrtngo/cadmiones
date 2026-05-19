@@ -13,6 +13,7 @@ export type Ruta = {
   id: number;
   consorcio: string;
   nombre: string;
+  m3: number | null;
   precio_facturado_m3km: number;
   precio_cobrado_m3km: number;
   created_at: string;
@@ -25,6 +26,7 @@ export type Registro = {
   consorcio: string | null;
   ruta_id: number | null;
   ruta_nombre: string | null;
+  m3: number | null;
   precio_facturado_m3km: number | null;
   precio_cobrado_m3km: number | null;
   km_recorridos: number;

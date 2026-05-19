@@ -35,13 +35,14 @@ export async function POST(req: Request) {
   if (!fecha) return NextResponse.json({ error: "fecha requerida" }, { status: 400 });
   if (!placa) return NextResponse.json({ error: "placa requerida" }, { status: 400 });
 
-  // Si viene ruta_id, los precios y el consorcio se snapshotean desde la ruta.
-  // Si no, se aceptan los valores libres del body (modo legacy).
+  // Si viene ruta_id, precios + m3 + consorcio se snapshotean desde la ruta
+  // (m3 de la ruta si existe, si no del vehículo). Si no, modo legacy.
   let ruta_id: number | null = body.ruta_id ? Number(body.ruta_id) : null;
   let ruta_nombre: string | null = null;
   let consorcio: string | null = body.consorcio ? String(body.consorcio).trim() || null : null;
   let precio_facturado_m3km: number | null = null;
   let precio_cobrado_m3km: number | null = null;
+  let m3: number | null = null;
 
   if (ruta_id) {
     const [r] = await sql<Ruta[]>`SELECT * FROM rutas WHERE id = ${ruta_id}`;
@@ -50,18 +51,26 @@ export async function POST(req: Request) {
     consorcio = r.consorcio;
     precio_facturado_m3km = r.precio_facturado_m3km;
     precio_cobrado_m3km = r.precio_cobrado_m3km;
+    if (r.m3 != null) {
+      m3 = r.m3;
+    } else {
+      const [v] = await sql<{ volumen_m3: number | null }[]>`
+        SELECT volumen_m3 FROM vehiculos WHERE placa = ${placa}
+      `;
+      m3 = v?.volumen_m3 ?? null;
+    }
   } else {
     ruta_id = null;
   }
 
   const [row] = await sql<Registro[]>`
     INSERT INTO registros (
-      fecha, placa, consorcio, ruta_id, ruta_nombre,
+      fecha, placa, consorcio, ruta_id, ruta_nombre, m3,
       precio_facturado_m3km, precio_cobrado_m3km,
       km_recorridos, gasto_gasolina, precio_gasolina, notas
     )
     VALUES (
-      ${fecha}, ${placa}, ${consorcio}, ${ruta_id}, ${ruta_nombre},
+      ${fecha}, ${placa}, ${consorcio}, ${ruta_id}, ${ruta_nombre}, ${m3},
       ${precio_facturado_m3km}, ${precio_cobrado_m3km},
       ${km_recorridos}, ${gasto_gasolina}, ${precio_gasolina}, ${notas}
     )

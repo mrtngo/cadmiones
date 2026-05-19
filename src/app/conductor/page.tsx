@@ -111,7 +111,8 @@ function ConductorInner() {
     [form.ruta_id, rutas]
   );
   const previewKm = Number(form.km || 0);
-  const previewM3 = vehiculoForm?.volumen_m3 ?? 0;
+  const previewM3 = rutaSel?.m3 ?? vehiculoForm?.volumen_m3 ?? 0;
+  const m3SourceLabel = rutaSel?.m3 != null ? "ruta" : "camión";
   const previewFacturado = rutaSel ? previewM3 * previewKm * rutaSel.precio_facturado_m3km : 0;
   const previewCobrado = rutaSel ? previewM3 * previewKm * rutaSel.precio_cobrado_m3km : 0;
 
@@ -185,7 +186,7 @@ function ConductorInner() {
                     <option value="">— Sin ruta —</option>
                     {rutasForm.map((r) => (
                       <option key={r.id} value={r.id}>
-                        {r.nombre} · fact {money(r.precio_facturado_m3km)} / cobr {money(r.precio_cobrado_m3km)}
+                        {r.nombre}{r.m3 != null ? ` · ${num(r.m3, 1)} m³` : ""} · fact {money(r.precio_facturado_m3km)} / cobr {money(r.precio_cobrado_m3km)}
                       </option>
                     ))}
                   </select>
@@ -207,7 +208,7 @@ function ConductorInner() {
             </div>
             {rutaSel && previewKm > 0 ? (
               <div className="rounded-md bg-zinc-50 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 p-3 text-xs space-y-1">
-                <div className="text-zinc-500">Vista previa: {num(previewM3, 1)} m³ × {num(previewKm, 1)} km</div>
+                <div className="text-zinc-500">Vista previa: {num(previewM3, 1)} m³ ({m3SourceLabel}) × {num(previewKm, 1)} km</div>
                 <div className="flex justify-between"><span>Facturado</span><strong>{money(previewFacturado)}</strong></div>
                 <div className="flex justify-between"><span>Cobrado</span><strong>{money(previewCobrado)}</strong></div>
                 <div className="flex justify-between"><span>Margen bruto</span><strong>{money(previewFacturado - previewCobrado)}</strong></div>

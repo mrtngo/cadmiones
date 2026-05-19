@@ -2,6 +2,12 @@ import { NextResponse } from "next/server";
 import { sql } from "@/lib/db";
 import type { Ruta } from "@/lib/types";
 
+function numOrNull(v: unknown): number | null {
+  if (v === "" || v == null) return null;
+  const n = Number(v);
+  return Number.isFinite(n) ? n : null;
+}
+
 export async function GET(req: Request) {
   const { searchParams } = new URL(req.url);
   const consorcio = searchParams.get("consorcio");
@@ -19,6 +25,7 @@ export async function POST(req: Request) {
   const body = await req.json();
   const consorcio = String(body.consorcio ?? "").trim();
   const nombre = String(body.nombre ?? "").trim();
+  const m3 = numOrNull(body.m3);
   const precio_facturado_m3km = Number(body.precio_facturado_m3km ?? 0);
   const precio_cobrado_m3km = Number(body.precio_cobrado_m3km ?? 0);
 
@@ -27,8 +34,8 @@ export async function POST(req: Request) {
 
   try {
     const [row] = await sql<Ruta[]>`
-      INSERT INTO rutas (consorcio, nombre, precio_facturado_m3km, precio_cobrado_m3km)
-      VALUES (${consorcio}, ${nombre}, ${precio_facturado_m3km}, ${precio_cobrado_m3km})
+      INSERT INTO rutas (consorcio, nombre, m3, precio_facturado_m3km, precio_cobrado_m3km)
+      VALUES (${consorcio}, ${nombre}, ${m3}, ${precio_facturado_m3km}, ${precio_cobrado_m3km})
       RETURNING *
     `;
     return NextResponse.json(row, { status: 201 });

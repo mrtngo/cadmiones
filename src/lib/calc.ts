@@ -1,11 +1,17 @@
 import type { Registro, Vehiculo } from "./types";
 
-// Total facturado del viaje. Si tiene snapshot de ruta usa m³ × km × precio_m3km.
+// m³ efectivos del viaje: el snapshot del registro (si tiene ruta con m3 propio o
+// cae al volumen del vehículo al guardar) tiene prioridad. Sin snapshot,
+// usamos el volumen del vehículo. Sin nada, 0.
+export function m3DeRegistro(r: Registro, v: Vehiculo | undefined): number {
+  return r.m3 ?? v?.volumen_m3 ?? 0;
+}
+
+// Total facturado del viaje. Si tiene snapshot de tarifa usa m³ × km × precio.
 // Si no (registro viejo sin ruta), cae al modelo legacy: km × vehiculo.precio_por_km.
 export function facturadoDeRegistro(r: Registro, v: Vehiculo | undefined): number {
   if (r.precio_facturado_m3km != null) {
-    const m3 = v?.volumen_m3 ?? 0;
-    return m3 * r.km_recorridos * r.precio_facturado_m3km;
+    return m3DeRegistro(r, v) * r.km_recorridos * r.precio_facturado_m3km;
   }
   return r.km_recorridos * (v?.precio_por_km ?? 0);
 }
@@ -13,8 +19,7 @@ export function facturadoDeRegistro(r: Registro, v: Vehiculo | undefined): numbe
 // Total cobrado (pago al conductor) del viaje. Solo aplica con ruta — sin snapshot, 0.
 export function cobradoDeRegistro(r: Registro, v: Vehiculo | undefined): number {
   if (r.precio_cobrado_m3km != null) {
-    const m3 = v?.volumen_m3 ?? 0;
-    return m3 * r.km_recorridos * r.precio_cobrado_m3km;
+    return m3DeRegistro(r, v) * r.km_recorridos * r.precio_cobrado_m3km;
   }
   return 0;
 }

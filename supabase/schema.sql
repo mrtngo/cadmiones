@@ -20,6 +20,9 @@ CREATE TABLE IF NOT EXISTS rutas (
   id                       BIGSERIAL PRIMARY KEY,
   consorcio                TEXT NOT NULL,
   nombre                   TEXT NOT NULL,
+  -- m3 opcional por ruta (cuando varía por densidad y no se usa el cubicaje del camión).
+  -- NULL = usar el volumen_m3 del vehículo.
+  m3                       DOUBLE PRECISION,
   precio_facturado_m3km    DOUBLE PRECISION NOT NULL DEFAULT 0,
   precio_cobrado_m3km      DOUBLE PRECISION NOT NULL DEFAULT 0,
   created_at               TIMESTAMPTZ NOT NULL DEFAULT NOW(),
@@ -37,6 +40,7 @@ CREATE TABLE IF NOT EXISTS registros (
   consorcio                TEXT,
   ruta_id                  BIGINT REFERENCES rutas(id) ON DELETE SET NULL,
   ruta_nombre              TEXT,
+  m3                       DOUBLE PRECISION,  -- snapshot del m3 usado (de la ruta o del vehículo)
   precio_facturado_m3km    DOUBLE PRECISION,
   precio_cobrado_m3km      DOUBLE PRECISION,
   km_recorridos            DOUBLE PRECISION NOT NULL DEFAULT 0,

@@ -2,15 +2,22 @@ import { NextResponse } from "next/server";
 import { sql } from "@/lib/db";
 import type { Ruta } from "@/lib/types";
 
+function numOrNull(v: unknown): number | null {
+  if (v === "" || v == null) return null;
+  const n = Number(v);
+  return Number.isFinite(n) ? n : null;
+}
+
 export async function PATCH(
   req: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
   const { id } = await params;
   const body = await req.json();
-  const updates: Record<string, string | number> = {};
+  const updates: Record<string, string | number | null> = {};
   if (body.nombre !== undefined) updates.nombre = String(body.nombre).trim();
   if (body.consorcio !== undefined) updates.consorcio = String(body.consorcio).trim();
+  if (body.m3 !== undefined) updates.m3 = numOrNull(body.m3);
   if (body.precio_facturado_m3km !== undefined) updates.precio_facturado_m3km = Number(body.precio_facturado_m3km);
   if (body.precio_cobrado_m3km !== undefined) updates.precio_cobrado_m3km = Number(body.precio_cobrado_m3km);
   if (Object.keys(updates).length === 0) {

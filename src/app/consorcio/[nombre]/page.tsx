@@ -24,6 +24,7 @@ export default function ConsorcioPage({
   // Form para nueva ruta
   const [nuevaRuta, setNuevaRuta] = useState({
     nombre: "",
+    m3: "",
     facturado: "",
     cobrado: "",
   });
@@ -57,6 +58,7 @@ export default function ConsorcioPage({
       body: JSON.stringify({
         consorcio: nombre,
         nombre: nuevaRuta.nombre,
+        m3: nuevaRuta.m3,
         precio_facturado_m3km: Number(nuevaRuta.facturado || 0),
         precio_cobrado_m3km: Number(nuevaRuta.cobrado || 0),
       }),
@@ -66,7 +68,7 @@ export default function ConsorcioPage({
       setRutaErr(j.error ?? "error");
       return;
     }
-    setNuevaRuta({ nombre: "", facturado: "", cobrado: "" });
+    setNuevaRuta({ nombre: "", m3: "", facturado: "", cobrado: "" });
     loadAll();
   }
 
@@ -143,9 +145,14 @@ export default function ConsorcioPage({
               <input className={inputCls} value={nuevaRuta.nombre} onChange={(e) => setNuevaRuta({ ...nuevaRuta, nombre: e.target.value })} placeholder="Cantera → Obra norte" required />
             </div>
             <div>
+              <Label>m³ por viaje (opcional)</Label>
+              <input className={inputCls} type="number" step="0.1" value={nuevaRuta.m3} onChange={(e) => setNuevaRuta({ ...nuevaRuta, m3: e.target.value })} placeholder="Vacío = usar volumen del camión" />
+              <p className="text-xs text-zinc-500 mt-1">Si la carga se mide por densidad y difiere del cubicaje del camión, poné el m³ acá. En blanco usa <code>volumen_m3</code> del vehículo.</p>
+            </div>
+            <div>
               <Label>Precio facturado · m³·km</Label>
               <input className={inputCls} type="number" step="0.01" value={nuevaRuta.facturado} onChange={(e) => setNuevaRuta({ ...nuevaRuta, facturado: e.target.value })} placeholder="1500" />
-              <p className="text-xs text-zinc-500 mt-1">Ingreso por m³·km. Total viaje = volumen × km × precio.</p>
+              <p className="text-xs text-zinc-500 mt-1">Ingreso por m³·km. Total viaje = m³ × km × precio.</p>
             </div>
             <div>
               <Label>Precio cobrado · m³·km</Label>
@@ -167,6 +174,7 @@ export default function ConsorcioPage({
                 <thead className="text-left text-xs uppercase tracking-wide text-zinc-500">
                   <tr>
                     <th className="py-2 pr-3">Ruta</th>
+                    <th className="py-2 pr-3 text-right">m³</th>
                     <th className="py-2 pr-3 text-right">Facturado · m³·km</th>
                     <th className="py-2 pr-3 text-right">Cobrado · m³·km</th>
                     <th className="py-2 pr-3 text-right">Margen · m³·km</th>
@@ -177,6 +185,7 @@ export default function ConsorcioPage({
                   {rutas.map((r) => (
                     <tr key={r.id}>
                       <td className="py-2 pr-3 font-medium">{r.nombre}</td>
+                      <td className="py-2 pr-3 text-right text-zinc-500">{r.m3 != null ? num(r.m3, 1) : <span className="italic">por camión</span>}</td>
                       <td className="py-2 pr-3 text-right">{money(r.precio_facturado_m3km)}</td>
                       <td className="py-2 pr-3 text-right">{money(r.precio_cobrado_m3km)}</td>
                       <td className="py-2 pr-3 text-right">{money(r.precio_facturado_m3km - r.precio_cobrado_m3km)}</td>
