@@ -36,6 +36,17 @@ export type Registro = {
   created_at: string;
 };
 
+export type Combustible = {
+  id: number;
+  fecha: string;
+  placa: string;
+  monto: number;
+  galones: number | null;
+  precio_galon: number | null;
+  notas: string | null;
+  created_at: string;
+};
+
 export type Anticipo = {
   id: number;
   fecha: string;

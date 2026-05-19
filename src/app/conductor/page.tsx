@@ -6,7 +6,7 @@ import { Card, H2, Label, Stat, btnCls, inputCls } from "@/components/ui";
 import { VehiculoSelector } from "@/components/VehiculoSelector";
 import { money, num, today } from "@/lib/format";
 import { cobradoDeRegistro, facturadoDeRegistro, totalesRegistros, vehiculosByPlaca } from "@/lib/calc";
-import type { Vehiculo, Registro, Ruta } from "@/lib/types";
+import type { Vehiculo, Registro, Ruta, Combustible } from "@/lib/types";
 
 function ConductorInner() {
   const search = useSearchParams();
@@ -15,6 +15,7 @@ function ConductorInner() {
   const [vehiculos, setVehiculos] = useState<Vehiculo[]>([]);
   const [registros, setRegistros] = useState<Registro[]>([]);
   const [rutas, setRutas] = useState<Ruta[]>([]);
+  const [combustibles, setCombustibles] = useState<Combustible[]>([]);
   const [placa, setPlaca] = useState(initialPlaca);
   const [consorcio, setConsorcio] = useState("");
   const [desde, setDesde] = useState("");
@@ -25,8 +26,6 @@ function ConductorInner() {
     placa: initialPlaca,
     ruta_id: "",
     km: "",
-    gasto: "",
-    precioGasolina: "",
     notas: "",
   });
 
@@ -51,8 +50,18 @@ function ConductorInner() {
     setRegistros(rs);
   }
 
+  async function loadCombustibles() {
+    // Combustibles no tienen consorcio — filtramos solo por placa + fechas.
+    const qs = new URLSearchParams();
+    if (placa) qs.set("placa", placa);
+    if (desde) qs.set("desde", desde);
+    if (hasta) qs.set("hasta", hasta);
+    const cs: Combustible[] = await fetch(`/api/combustibles?${qs}`).then((r) => r.json());
+    setCombustibles(cs);
+  }
+
   useEffect(() => { loadVehiculos(); loadRutas(); }, []);
-  useEffect(() => { loadRegistros(); }, [placa, consorcio, desde, hasta]);
+  useEffect(() => { loadRegistros(); loadCombustibles(); }, [placa, consorcio, desde, hasta]);
 
   const vByPlaca = useMemo(() => vehiculosByPlaca(vehiculos), [vehiculos]);
   const vehiculoForm = useMemo(() => vByPlaca.get(form.placa), [vByPlaca, form.placa]);
@@ -77,8 +86,6 @@ function ConductorInner() {
         placa: form.placa,
         ruta_id: form.ruta_id ? Number(form.ruta_id) : null,
         km_recorridos: Number(form.km || 0),
-        gasto_gasolina: Number(form.gasto || 0),
-        precio_gasolina: form.precioGasolina ? Number(form.precioGasolina) : null,
         notas: form.notas || null,
       }),
     });
@@ -86,7 +93,7 @@ function ConductorInner() {
       alert("No se pudo guardar");
       return;
     }
-    setForm((f) => ({ ...f, km: "", gasto: "", precioGasolina: "", notas: "" }));
+    setForm((f) => ({ ...f, km: "", notas: "" }));
     loadRegistros();
   }
 
@@ -98,6 +105,10 @@ function ConductorInner() {
 
   const totales = useMemo(() => totalesRegistros(registros, vByPlaca), [registros, vByPlaca]);
   const dias = useMemo(() => new Set(registros.map((r) => r.fecha)).size, [registros]);
+  const gastoCombustible = useMemo(() => {
+    const tanqueadas = combustibles.reduce((s, c) => s + c.monto, 0);
+    return tanqueadas + totales.gasto; // suma combustibles + gasolina legacy de registros viejos
+  }, [combustibles, totales.gasto]);
 
   const consorciosKnown = useMemo(() => {
     const s = new Set<string>();
@@ -151,8 +162,8 @@ function ConductorInner() {
       <section className="grid grid-cols-2 md:grid-cols-5 gap-3">
         <Stat label="Km" value={num(totales.km)} />
         <Stat label="Cobrado (a conductor)" value={money(totales.cobrado)} hint="m³ × km × tarifa" />
-        <Stat label="Gasto gasolina" value={money(totales.gasto)} />
-        <Stat label="Costo / km" value={money(totales.km ? totales.gasto / totales.km : 0)} hint="gasto ÷ km" />
+        <Stat label="Gasto combustible" value={money(gastoCombustible)} hint="tanqueadas + legacy" />
+        <Stat label="Costo / km" value={money(totales.km ? gastoCombustible / totales.km : 0)} hint="gasto ÷ km" />
         <Stat label="Días con viaje" value={num(dias)} />
       </section>
 
@@ -215,14 +226,6 @@ function ConductorInner() {
               </div>
             ) : null}
             <div>
-              <Label>Gasto gasolina (opcional)</Label>
-              <input className={inputCls} type="number" step="0.01" value={form.gasto} onChange={(e) => setForm({ ...form, gasto: e.target.value })} placeholder="80000" />
-            </div>
-            <div>
-              <Label>Precio gasolina /galón (opcional)</Label>
-              <input className={inputCls} type="number" step="0.01" value={form.precioGasolina} onChange={(e) => setForm({ ...form, precioGasolina: e.target.value })} placeholder="15000" />
-            </div>
-            <div>
               <Label>Notas</Label>
               <input className={inputCls} value={form.notas} onChange={(e) => setForm({ ...form, notas: e.target.value })} placeholder="Observaciones…" />
             </div>
@@ -245,7 +248,6 @@ function ConductorInner() {
                     <th className="py-2 pr-3 text-right">Km</th>
                     <th className="py-2 pr-3 text-right">Facturado</th>
                     <th className="py-2 pr-3 text-right">Cobrado</th>
-                    <th className="py-2 pr-3 text-right">Gasolina</th>
                     <th className="py-2"></th>
                   </tr>
                 </thead>
@@ -260,7 +262,6 @@ function ConductorInner() {
                         <td className="py-2 pr-3 text-right">{num(r.km_recorridos, 1)}</td>
                         <td className="py-2 pr-3 text-right">{money(facturadoDeRegistro(r, v))}</td>
                         <td className="py-2 pr-3 text-right">{money(cobradoDeRegistro(r, v))}</td>
-                        <td className="py-2 pr-3 text-right text-zinc-500">{money(r.gasto_gasolina)}</td>
                         <td className="py-2 text-right">
                           <button onClick={() => delRegistro(r.id)} className="text-xs text-red-600 hover:underline">eliminar</button>
                         </td>

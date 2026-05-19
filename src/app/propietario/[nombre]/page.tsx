@@ -4,7 +4,7 @@ import Link from "next/link";
 import { Card, H2, Label, Stat, btnGhostCls, inputCls } from "@/components/ui";
 import { money, num } from "@/lib/format";
 import { totalesRegistros, vehiculosByPlaca } from "@/lib/calc";
-import type { Vehiculo, Registro, Anticipo } from "@/lib/types";
+import type { Vehiculo, Registro, Anticipo, Combustible } from "@/lib/types";
 
 export default function PropietarioPage({
   params,
@@ -17,6 +17,7 @@ export default function PropietarioPage({
   const [vehiculos, setVehiculos] = useState<Vehiculo[]>([]);
   const [registros, setRegistros] = useState<Registro[]>([]);
   const [anticipos, setAnticipos] = useState<Anticipo[]>([]);
+  const [combustibles, setCombustibles] = useState<Combustible[]>([]);
   const [desde, setDesde] = useState("");
   const [hasta, setHasta] = useState("");
 
@@ -24,14 +25,16 @@ export default function PropietarioPage({
     const qs = new URLSearchParams();
     if (desde) qs.set("desde", desde);
     if (hasta) qs.set("hasta", hasta);
-    const [vs, rs, as] = await Promise.all([
+    const [vs, rs, as, cs] = await Promise.all([
       fetch("/api/vehiculos").then((r) => r.json()),
       fetch(`/api/registros?${qs}`).then((r) => r.json()),
       fetch(`/api/anticipos?${qs}`).then((r) => r.json()),
+      fetch(`/api/combustibles?${qs}`).then((r) => r.json()),
     ]);
     setVehiculos(vs);
     setRegistros(rs);
     setAnticipos(as);
+    setCombustibles(cs);
   }
 
   useEffect(() => { loadAll(); }, [desde, hasta]);
@@ -42,9 +45,14 @@ export default function PropietarioPage({
 
   const myRegistros = useMemo(() => registros.filter((r) => placas.has(r.placa)), [registros, placas]);
   const myAnticipos = useMemo(() => anticipos.filter((a) => placas.has(a.placa)), [anticipos, placas]);
+  const myCombustibles = useMemo(() => combustibles.filter((c) => placas.has(c.placa)), [combustibles, placas]);
 
   const totales = useMemo(() => totalesRegistros(myRegistros, vByPlaca), [myRegistros, vByPlaca]);
   const totalAnticipos = useMemo(() => myAnticipos.reduce((s, a) => s + a.monto, 0), [myAnticipos]);
+  const totalCombustible = useMemo(
+    () => myCombustibles.reduce((s, c) => s + c.monto, 0) + totales.gasto,
+    [myCombustibles, totales.gasto]
+  );
 
   const perPlaca = useMemo(() => {
     return mine.map((v) => {
@@ -80,10 +88,11 @@ export default function PropietarioPage({
         </div>
       </Card>
 
-      <section className="grid grid-cols-2 md:grid-cols-5 gap-3">
+      <section className="grid grid-cols-2 md:grid-cols-6 gap-3">
         <Stat label="Km" value={num(totales.km)} />
         <Stat label="Facturado" value={money(totales.facturado)} />
         <Stat label="Cobrado conductor" value={money(totales.cobrado)} />
+        <Stat label="Combustible" value={money(totalCombustible)} />
         <Stat label="Anticipos" value={money(totalAnticipos)} />
         <Stat label="Por cobrar" value={money(totales.facturado - totalAnticipos)} hint="fact − anticipos" />
       </section>

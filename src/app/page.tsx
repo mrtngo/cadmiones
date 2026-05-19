@@ -4,7 +4,7 @@ import Link from "next/link";
 import { Card, H2, Label, Stat, btnCls, btnGhostCls, inputCls } from "@/components/ui";
 import { money, num, today } from "@/lib/format";
 import { totalesRegistros, vehiculosByPlaca, type Totales } from "@/lib/calc";
-import type { Vehiculo, Registro, Anticipo } from "@/lib/types";
+import type { Vehiculo, Registro, Anticipo, Combustible } from "@/lib/types";
 
 const SIN_PROP = "Sin propietario";
 const SIN_CONS = "Sin consorcio";
@@ -21,6 +21,7 @@ export default function HomePage() {
   const [vehiculos, setVehiculos] = useState<Vehiculo[]>([]);
   const [registros, setRegistros] = useState<Registro[]>([]);
   const [anticipos, setAnticipos] = useState<Anticipo[]>([]);
+  const [combustibles, setCombustibles] = useState<Combustible[]>([]);
   const [form, setForm] = useState({
     placa: "",
     conductor: "",
@@ -32,14 +33,16 @@ export default function HomePage() {
   const [err, setErr] = useState<string | null>(null);
 
   async function loadAll() {
-    const [vs, rs, as] = await Promise.all([
+    const [vs, rs, as, cs] = await Promise.all([
       fetch("/api/vehiculos").then((r) => r.json()),
       fetch("/api/registros").then((r) => r.json()),
       fetch("/api/anticipos").then((r) => r.json()),
+      fetch("/api/combustibles").then((r) => r.json()),
     ]);
     setVehiculos(vs);
     setRegistros(rs);
     setAnticipos(as);
+    setCombustibles(cs);
   }
 
   useEffect(() => { loadAll(); }, []);
@@ -125,6 +128,11 @@ export default function HomePage() {
 
   const totals = useMemo(() => totalesRegistros(registros, vByPlaca), [registros, vByPlaca]);
   const totalAnticipos = useMemo(() => anticipos.reduce((s, a) => s + a.monto, 0), [anticipos]);
+  const totalCombustible = useMemo(
+    () => combustibles.reduce((s, c) => s + c.monto, 0) + totals.gasto,
+    [combustibles, totals.gasto]
+  );
+  const margenReal = totals.facturado - totals.cobrado - totalCombustible;
 
   const propietariosKnown = useMemo(
     () => Array.from(new Set(vehiculos.map((v) => v.propietario).filter(Boolean) as string[])),
@@ -145,12 +153,13 @@ export default function HomePage() {
         <p className="text-sm text-zinc-500 mt-1">Hoy: {today()}</p>
       </section>
 
-      <section className="grid grid-cols-2 md:grid-cols-5 gap-3">
+      <section className="grid grid-cols-2 md:grid-cols-6 gap-3">
         <Stat label="Km totales" value={num(totals.km)} />
         <Stat label="Facturado" value={money(totals.facturado)} hint="m³ × km × tarifa" />
         <Stat label="Cobrado (conductor)" value={money(totals.cobrado)} />
-        <Stat label="Margen" value={money(totals.margen)} hint="fact − cobr − gas" />
-        <Stat label="Anticipos recibidos" value={money(totalAnticipos)} />
+        <Stat label="Combustible" value={money(totalCombustible)} />
+        <Stat label="Margen" value={money(margenReal)} hint="fact − cobr − comb" />
+        <Stat label="Anticipos" value={money(totalAnticipos)} />
       </section>
 
       <section>
