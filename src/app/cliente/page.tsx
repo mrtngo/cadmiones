@@ -89,6 +89,31 @@ function ClienteInner() {
     loadData();
   }
 
+  // Edit anticipo inline
+  const [editingAntId, setEditingAntId] = useState<number | null>(null);
+  const [editAnt, setEditAnt] = useState({ fecha: "", monto: "", consorcio: "", notas: "" });
+
+  function startEditAnt(a: Anticipo) {
+    setEditingAntId(a.id);
+    setEditAnt({ fecha: a.fecha, monto: String(a.monto), consorcio: a.consorcio ?? "", notas: a.notas ?? "" });
+  }
+
+  async function saveEditAnt(id: number) {
+    const res = await fetch(`/api/anticipos/${id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        fecha: editAnt.fecha,
+        monto: Number(editAnt.monto || 0),
+        consorcio: editAnt.consorcio || null,
+        notas: editAnt.notas || null,
+      }),
+    });
+    if (!res.ok) { alert("No se pudo guardar"); return; }
+    setEditingAntId(null);
+    loadData();
+  }
+
   const vByPlaca = useMemo(() => vehiculosByPlaca(vehiculos), [vehiculos]);
   const totales = useMemo(() => totalesRegistros(registros, vByPlaca), [registros, vByPlaca]);
   const totalAnticipos = useMemo(() => anticipos.reduce((s, a) => s + a.monto, 0), [anticipos]);
@@ -227,14 +252,27 @@ function ClienteInner() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-zinc-200 dark:divide-zinc-800">
-                  {anticipos.map((a) => (
+                  {anticipos.map((a) => editingAntId === a.id ? (
+                    <tr key={a.id} className="bg-zinc-50 dark:bg-zinc-900/50">
+                      <td className="py-2 pr-3"><input className={inputCls} type="date" value={editAnt.fecha} onChange={(e) => setEditAnt({ ...editAnt, fecha: e.target.value })} /></td>
+                      <td className="py-2 pr-3 font-medium">{a.placa}</td>
+                      <td className="py-2 pr-3"><input className={inputCls} value={editAnt.consorcio} onChange={(e) => setEditAnt({ ...editAnt, consorcio: e.target.value })} list="cliente-cons-list" /></td>
+                      <td className="py-2 pr-3"><input className={inputCls + " text-right"} type="number" step="0.01" value={editAnt.monto} onChange={(e) => setEditAnt({ ...editAnt, monto: e.target.value })} /></td>
+                      <td className="py-2 pr-3"><input className={inputCls} value={editAnt.notas} onChange={(e) => setEditAnt({ ...editAnt, notas: e.target.value })} /></td>
+                      <td className="py-2 text-right whitespace-nowrap">
+                        <button onClick={() => saveEditAnt(a.id)} className="text-xs text-emerald-600 hover:underline mr-2">guardar</button>
+                        <button onClick={() => setEditingAntId(null)} className="text-xs text-zinc-500 hover:underline">cancelar</button>
+                      </td>
+                    </tr>
+                  ) : (
                     <tr key={a.id}>
                       <td className="py-2 pr-3 whitespace-nowrap">{a.fecha}</td>
                       <td className="py-2 pr-3 font-medium">{a.placa}</td>
                       <td className="py-2 pr-3 text-zinc-500">{a.consorcio ?? "—"}</td>
                       <td className="py-2 pr-3 text-right">{money(a.monto)}</td>
                       <td className="py-2 pr-3 text-zinc-500">{a.notas ?? ""}</td>
-                      <td className="py-2 text-right">
+                      <td className="py-2 text-right whitespace-nowrap">
+                        <button onClick={() => startEditAnt(a)} className="text-xs text-zinc-600 dark:text-zinc-400 hover:underline mr-2">editar</button>
                         <button onClick={() => delAnticipo(a.id)} className="text-xs text-red-600 hover:underline">eliminar</button>
                       </td>
                     </tr>

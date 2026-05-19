@@ -103,6 +103,30 @@ function ConductorInner() {
     loadRegistros();
   }
 
+  // Edit viaje inline
+  const [editingViajeId, setEditingViajeId] = useState<number | null>(null);
+  const [editViaje, setEditViaje] = useState({ fecha: "", km: "", notas: "" });
+
+  function startEditViaje(r: Registro) {
+    setEditingViajeId(r.id);
+    setEditViaje({ fecha: r.fecha, km: String(r.km_recorridos), notas: r.notas ?? "" });
+  }
+
+  async function saveEditViaje(id: number) {
+    const res = await fetch(`/api/registros/${id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        fecha: editViaje.fecha,
+        km_recorridos: Number(editViaje.km || 0),
+        notas: editViaje.notas || null,
+      }),
+    });
+    if (!res.ok) { alert("No se pudo guardar"); return; }
+    setEditingViajeId(null);
+    loadRegistros();
+  }
+
   const totales = useMemo(() => totalesRegistros(registros, vByPlaca), [registros, vByPlaca]);
   const dias = useMemo(() => new Set(registros.map((r) => r.fecha)).size, [registros]);
   const gastoCombustible = useMemo(() => {
@@ -254,6 +278,26 @@ function ConductorInner() {
                 <tbody className="divide-y divide-zinc-200 dark:divide-zinc-800">
                   {registros.map((r) => {
                     const v = vByPlaca.get(r.placa);
+                    if (editingViajeId === r.id) {
+                      const previewKm = Number(editViaje.km || 0);
+                      const m3eff = r.m3 ?? v?.volumen_m3 ?? 0;
+                      const fact = r.precio_facturado_m3km != null ? m3eff * previewKm * r.precio_facturado_m3km : previewKm * (v?.precio_por_km ?? 0);
+                      const cobr = r.precio_cobrado_m3km != null ? m3eff * previewKm * r.precio_cobrado_m3km : 0;
+                      return (
+                        <tr key={r.id} className="bg-zinc-50 dark:bg-zinc-900/50">
+                          <td className="py-2 pr-3"><input className={inputCls} type="date" value={editViaje.fecha} onChange={(e) => setEditViaje({ ...editViaje, fecha: e.target.value })} /></td>
+                          <td className="py-2 pr-3 font-medium">{r.placa}</td>
+                          <td className="py-2 pr-3 text-zinc-500"><input className={inputCls} value={editViaje.notas} onChange={(e) => setEditViaje({ ...editViaje, notas: e.target.value })} placeholder={r.ruta_nombre ?? "notas"} /></td>
+                          <td className="py-2 pr-3"><input className={inputCls + " text-right"} type="number" step="0.1" value={editViaje.km} onChange={(e) => setEditViaje({ ...editViaje, km: e.target.value })} /></td>
+                          <td className="py-2 pr-3 text-right text-zinc-500">{money(fact)}</td>
+                          <td className="py-2 pr-3 text-right text-zinc-500">{money(cobr)}</td>
+                          <td className="py-2 text-right whitespace-nowrap">
+                            <button onClick={() => saveEditViaje(r.id)} className="text-xs text-emerald-600 hover:underline mr-2">guardar</button>
+                            <button onClick={() => setEditingViajeId(null)} className="text-xs text-zinc-500 hover:underline">cancelar</button>
+                          </td>
+                        </tr>
+                      );
+                    }
                     return (
                       <tr key={r.id}>
                         <td className="py-2 pr-3 whitespace-nowrap">{r.fecha}</td>
@@ -262,7 +306,8 @@ function ConductorInner() {
                         <td className="py-2 pr-3 text-right">{num(r.km_recorridos, 1)}</td>
                         <td className="py-2 pr-3 text-right">{money(facturadoDeRegistro(r, v))}</td>
                         <td className="py-2 pr-3 text-right">{money(cobradoDeRegistro(r, v))}</td>
-                        <td className="py-2 text-right">
+                        <td className="py-2 text-right whitespace-nowrap">
+                          <button onClick={() => startEditViaje(r)} className="text-xs text-zinc-600 dark:text-zinc-400 hover:underline mr-2">editar</button>
                           <button onClick={() => delRegistro(r.id)} className="text-xs text-red-600 hover:underline">eliminar</button>
                         </td>
                       </tr>

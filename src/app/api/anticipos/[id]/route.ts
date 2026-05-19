@@ -1,5 +1,26 @@
 import { NextResponse } from "next/server";
 import { sql } from "@/lib/db";
+import type { Anticipo } from "@/lib/types";
+
+export async function PATCH(
+  req: Request,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  const { id } = await params;
+  const body = await req.json();
+  const updates: Record<string, string | number | null> = {};
+  if (body.fecha !== undefined) updates.fecha = String(body.fecha).trim();
+  if (body.monto !== undefined) updates.monto = Number(body.monto);
+  if (body.consorcio !== undefined) updates.consorcio = body.consorcio ? String(body.consorcio).trim() || null : null;
+  if (body.notas !== undefined) updates.notas = body.notas ? String(body.notas) : null;
+  if (Object.keys(updates).length === 0) {
+    return NextResponse.json({ error: "nada que actualizar" }, { status: 400 });
+  }
+  await sql`UPDATE anticipos SET ${sql(updates)} WHERE id = ${Number(id)}`;
+  const [row] = await sql<Anticipo[]>`SELECT * FROM anticipos WHERE id = ${Number(id)}`;
+  if (!row) return NextResponse.json({ error: "no existe" }, { status: 404 });
+  return NextResponse.json(row);
+}
 
 export async function DELETE(
   _req: Request,
