@@ -8,6 +8,12 @@ function trimOrNull(v: unknown): string | null {
   return s ? s : null;
 }
 
+function numOrNull(v: unknown): number | null {
+  if (v === "" || v == null) return null;
+  const n = Number(v);
+  return Number.isFinite(n) ? n : null;
+}
+
 export async function PATCH(
   req: Request,
   { params }: { params: Promise<{ placa: string }> }
@@ -20,6 +26,8 @@ export async function PATCH(
   if (body.alias !== undefined) updates.alias = trimOrNull(body.alias);
   if (body.conductor !== undefined) updates.conductor = trimOrNull(body.conductor);
   if (body.propietario !== undefined) updates.propietario = trimOrNull(body.propietario);
+  if (body.volumen_m3 !== undefined) updates.volumen_m3 = numOrNull(body.volumen_m3);
+  if (body.consorcio_actual !== undefined) updates.consorcio_actual = trimOrNull(body.consorcio_actual);
   if (body.precio_por_km !== undefined) updates.precio_por_km = Number(body.precio_por_km);
 
   if (Object.keys(updates).length === 0) {

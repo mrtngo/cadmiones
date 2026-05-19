@@ -5,6 +5,7 @@ import type { Anticipo } from "@/lib/types";
 export async function GET(req: Request) {
   const { searchParams } = new URL(req.url);
   const placa = searchParams.get("placa");
+  const consorcio = searchParams.get("consorcio");
   const desde = searchParams.get("desde");
   const hasta = searchParams.get("hasta");
 
@@ -12,6 +13,7 @@ export async function GET(req: Request) {
     SELECT * FROM anticipos
     WHERE TRUE
       ${placa ? sql`AND placa = ${placa.toUpperCase()}` : sql``}
+      ${consorcio ? sql`AND consorcio = ${consorcio}` : sql``}
       ${desde ? sql`AND fecha >= ${desde}` : sql``}
       ${hasta ? sql`AND fecha <= ${hasta}` : sql``}
     ORDER BY fecha DESC, id DESC
@@ -23,6 +25,7 @@ export async function POST(req: Request) {
   const body = await req.json();
   const fecha = String(body.fecha ?? "").trim();
   const placa = String(body.placa ?? "").trim().toUpperCase();
+  const consorcio = body.consorcio ? String(body.consorcio).trim() || null : null;
   const monto = Number(body.monto ?? 0);
   const notas = body.notas ? String(body.notas) : null;
 
@@ -31,8 +34,8 @@ export async function POST(req: Request) {
   if (!monto) return NextResponse.json({ error: "monto requerido" }, { status: 400 });
 
   const [row] = await sql<Anticipo[]>`
-    INSERT INTO anticipos (fecha, placa, monto, notas)
-    VALUES (${fecha}, ${placa}, ${monto}, ${notas})
+    INSERT INTO anticipos (fecha, placa, consorcio, monto, notas)
+    VALUES (${fecha}, ${placa}, ${consorcio}, ${monto}, ${notas})
     RETURNING *
   `;
   return NextResponse.json(row, { status: 201 });

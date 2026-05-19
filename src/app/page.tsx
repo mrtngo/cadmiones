@@ -6,9 +6,9 @@ import { money, num, today } from "@/lib/format";
 import type { Vehiculo, Registro, Anticipo } from "@/lib/types";
 
 const SIN_PROP = "Sin propietario";
+const SIN_CONS = "Sin consorcio";
 
 type Agg = {
-  placas: string[];
   km: number;
   gasto: number;
   ingreso: number;
@@ -16,8 +16,7 @@ type Agg = {
   neto: number;
 };
 
-function aggFor(
-  placas: Set<string>,
+function aggregate(
   vehiculos: Vehiculo[],
   registros: Registro[],
   anticipos: Anticipo[]
@@ -25,13 +24,12 @@ function aggFor(
   const tarifa = new Map(vehiculos.map((v) => [v.placa, v.precio_por_km]));
   let km = 0, gasto = 0, ingreso = 0, ant = 0;
   for (const r of registros) {
-    if (!placas.has(r.placa)) continue;
     km += r.km_recorridos;
     gasto += r.gasto_gasolina;
     ingreso += r.km_recorridos * (tarifa.get(r.placa) ?? 0);
   }
-  for (const a of anticipos) if (placas.has(a.placa)) ant += a.monto;
-  return { placas: [...placas], km, gasto, ingreso, anticipos: ant, neto: ingreso - ant };
+  for (const a of anticipos) ant += a.monto;
+  return { km, gasto, ingreso, anticipos: ant, neto: ingreso - ant };
 }
 
 export default function HomePage() {
@@ -43,6 +41,8 @@ export default function HomePage() {
     conductor: "",
     propietario: "",
     alias: "",
+    volumen: "",
+    consorcio: "",
     precio: "",
   });
   const [err, setErr] = useState<string | null>(null);
@@ -71,6 +71,8 @@ export default function HomePage() {
         conductor: form.conductor,
         propietario: form.propietario,
         alias: form.alias,
+        volumen_m3: form.volumen,
+        consorcio_actual: form.consorcio,
         precio_por_km: Number(form.precio || 0),
       }),
     });
@@ -79,7 +81,7 @@ export default function HomePage() {
       setErr(j.error ?? "error");
       return;
     }
-    setForm({ placa: "", conductor: "", propietario: "", alias: "", precio: "" });
+    setForm({ placa: "", conductor: "", propietario: "", alias: "", volumen: "", consorcio: "", precio: "" });
     loadAll();
   }
 
@@ -97,18 +99,50 @@ export default function HomePage() {
       list.push(v);
       groups.set(key, list);
     }
-    return [...groups.entries()]
-      .map(([nombre, vs]) => {
-        const placas = new Set(vs.map((v) => v.placa));
-        return { nombre, vehiculos: vs, agg: aggFor(placas, vehiculos, registros, anticipos) };
-      })
-      .sort((a, b) => b.agg.neto - a.agg.neto);
+    return [...groups.entries()].map(([nombre, vs]) => {
+      const placas = new Set(vs.map((v) => v.placa));
+      const rs = registros.filter((r) => placas.has(r.placa));
+      const as = anticipos.filter((a) => placas.has(a.placa));
+      return { nombre, vehiculos: vs, agg: aggregate(vs, rs, as) };
+    }).sort((a, b) => b.agg.neto - a.agg.neto);
+  }, [vehiculos, registros, anticipos]);
+
+  // Consorcios: usa el consorcio "congelado" en cada registro/anticipo.
+  // Un consorcio puede aparecer aunque hoy ningún vehículo lo tenga como "actual".
+  const consorcios = useMemo(() => {
+    const allNames = new Set<string>();
+    for (const r of registros) allNames.add(r.consorcio?.trim() || SIN_CONS);
+    for (const a of anticipos) allNames.add(a.consorcio?.trim() || SIN_CONS);
+    for (const v of vehiculos) if (v.consorcio_actual) allNames.add(v.consorcio_actual.trim());
+
+    return [...allNames].map((nombre) => {
+      const matches = (val: string | null | undefined) => (val?.trim() || SIN_CONS) === nombre;
+      const rs = registros.filter((r) => matches(r.consorcio));
+      const as = anticipos.filter((a) => matches(a.consorcio));
+      const placas = new Set([...rs.map((r) => r.placa), ...as.map((a) => a.placa)]);
+      if (nombre !== SIN_CONS) {
+        for (const v of vehiculos) if (v.consorcio_actual?.trim() === nombre) placas.add(v.placa);
+      }
+      return { nombre, placas: [...placas], agg: aggregate(vehiculos, rs, as) };
+    }).sort((a, b) => b.agg.neto - a.agg.neto);
   }, [vehiculos, registros, anticipos]);
 
   const totals = useMemo(
-    () => aggFor(new Set(vehiculos.map((v) => v.placa)), vehiculos, registros, anticipos),
+    () => aggregate(vehiculos, registros, anticipos),
     [vehiculos, registros, anticipos]
   );
+
+  const propietariosKnown = useMemo(
+    () => Array.from(new Set(vehiculos.map((v) => v.propietario).filter(Boolean) as string[])),
+    [vehiculos]
+  );
+  const consorciosKnown = useMemo(() => {
+    const s = new Set<string>();
+    for (const v of vehiculos) if (v.consorcio_actual) s.add(v.consorcio_actual);
+    for (const r of registros) if (r.consorcio) s.add(r.consorcio);
+    for (const a of anticipos) if (a.consorcio) s.add(a.consorcio);
+    return [...s];
+  }, [vehiculos, registros, anticipos]);
 
   return (
     <div className="space-y-6">
@@ -131,44 +165,61 @@ export default function HomePage() {
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
             {propietarios.map((p) => {
-              const realProp = p.nombre !== SIN_PROP;
-              const href = realProp ? `/propietario/${encodeURIComponent(p.nombre)}` : "#";
-              const Wrap = ({ children }: { children: React.ReactNode }) =>
-                realProp ? (
-                  <Link href={href} className="block group">{children}</Link>
-                ) : (
-                  <div>{children}</div>
-                );
-              return (
-                <Wrap key={p.nombre}>
-                  <div className={`rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-4 ${realProp ? "transition-colors group-hover:border-zinc-400 dark:group-hover:border-zinc-500 cursor-pointer" : "opacity-75"}`}>
-                    <div className="flex items-baseline justify-between gap-2">
-                      <h3 className="font-semibold tracking-tight">{p.nombre}</h3>
-                      <span className="text-xs text-zinc-500">{p.vehiculos.length} placa{p.vehiculos.length !== 1 ? "s" : ""}</span>
-                    </div>
-                    <div className="mt-1 text-xs text-zinc-500 truncate">
-                      {p.vehiculos.map((v) => v.placa).join(" · ")}
-                    </div>
-                    <div className="mt-3 grid grid-cols-2 gap-2 text-sm">
-                      <div>
-                        <div className="text-xs text-zinc-500">Km</div>
-                        <div className="font-medium">{num(p.agg.km)}</div>
-                      </div>
-                      <div>
-                        <div className="text-xs text-zinc-500">Ingreso</div>
-                        <div className="font-medium">{money(p.agg.ingreso)}</div>
-                      </div>
-                      <div>
-                        <div className="text-xs text-zinc-500">Anticipos</div>
-                        <div className="font-medium">{money(p.agg.anticipos)}</div>
-                      </div>
-                      <div>
-                        <div className="text-xs text-zinc-500">Neto</div>
-                        <div className={`font-semibold ${p.agg.neto >= 0 ? "" : "text-red-600"}`}>{money(p.agg.neto)}</div>
-                      </div>
-                    </div>
+              const real = p.nombre !== SIN_PROP;
+              const inner = (
+                <div className={`rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-4 ${real ? "transition-colors group-hover:border-zinc-400 dark:group-hover:border-zinc-500 cursor-pointer" : "opacity-75"}`}>
+                  <div className="flex items-baseline justify-between gap-2">
+                    <h3 className="font-semibold tracking-tight">{p.nombre}</h3>
+                    <span className="text-xs text-zinc-500">{p.vehiculos.length} placa{p.vehiculos.length !== 1 ? "s" : ""}</span>
                   </div>
-                </Wrap>
+                  <div className="mt-1 text-xs text-zinc-500 truncate">
+                    {p.vehiculos.map((v) => v.placa).join(" · ")}
+                  </div>
+                  <div className="mt-3 grid grid-cols-2 gap-2 text-sm">
+                    <Mini label="Km" value={num(p.agg.km)} />
+                    <Mini label="Ingreso" value={money(p.agg.ingreso)} />
+                    <Mini label="Anticipos" value={money(p.agg.anticipos)} />
+                    <Mini label="Neto" value={money(p.agg.neto)} className={p.agg.neto >= 0 ? "" : "text-red-600"} />
+                  </div>
+                </div>
+              );
+              return real ? (
+                <Link key={p.nombre} href={`/propietario/${encodeURIComponent(p.nombre)}`} className="block group">{inner}</Link>
+              ) : (
+                <div key={p.nombre}>{inner}</div>
+              );
+            })}
+          </div>
+        )}
+      </section>
+
+      <section>
+        <H2>Consorcios</H2>
+        {consorcios.length === 0 ? (
+          <p className="text-sm text-zinc-500">Sin consorcios todavía. Se crean al cargar registros o anticipos.</p>
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+            {consorcios.map((c) => {
+              const real = c.nombre !== SIN_CONS;
+              const inner = (
+                <div className={`rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-4 ${real ? "transition-colors group-hover:border-zinc-400 dark:group-hover:border-zinc-500 cursor-pointer" : "opacity-75"}`}>
+                  <div className="flex items-baseline justify-between gap-2">
+                    <h3 className="font-semibold tracking-tight">{c.nombre}</h3>
+                    <span className="text-xs text-zinc-500">{c.placas.length} placa{c.placas.length !== 1 ? "s" : ""}</span>
+                  </div>
+                  <div className="mt-1 text-xs text-zinc-500 truncate">{c.placas.join(" · ") || "—"}</div>
+                  <div className="mt-3 grid grid-cols-2 gap-2 text-sm">
+                    <Mini label="Km" value={num(c.agg.km)} />
+                    <Mini label="Ingreso" value={money(c.agg.ingreso)} />
+                    <Mini label="Anticipos" value={money(c.agg.anticipos)} />
+                    <Mini label="Neto" value={money(c.agg.neto)} className={c.agg.neto >= 0 ? "" : "text-red-600"} />
+                  </div>
+                </div>
+              );
+              return real ? (
+                <Link key={c.nombre} href={`/consorcio/${encodeURIComponent(c.nombre)}`} className="block group">{inner}</Link>
+              ) : (
+                <div key={c.nombre}>{inner}</div>
               );
             })}
           </div>
@@ -192,9 +243,20 @@ export default function HomePage() {
                 <Label>Propietario</Label>
                 <input className={inputCls} value={form.propietario} onChange={(e) => setForm({ ...form, propietario: e.target.value })} placeholder="Don Juan" list="propietario-list" />
                 <datalist id="propietario-list">
-                  {Array.from(new Set(vehiculos.map((v) => v.propietario).filter(Boolean) as string[])).map((p) => (
-                    <option key={p} value={p} />
-                  ))}
+                  {propietariosKnown.map((p) => <option key={p} value={p} />)}
+                </datalist>
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <Label>Volumen (m³)</Label>
+                <input className={inputCls} type="number" step="0.1" value={form.volumen} onChange={(e) => setForm({ ...form, volumen: e.target.value })} placeholder="8" />
+              </div>
+              <div>
+                <Label>Consorcio actual</Label>
+                <input className={inputCls} value={form.consorcio} onChange={(e) => setForm({ ...form, consorcio: e.target.value })} placeholder="Constructora X" list="consorcio-list" />
+                <datalist id="consorcio-list">
+                  {consorciosKnown.map((c) => <option key={c} value={c} />)}
                 </datalist>
               </div>
             </div>
@@ -225,10 +287,12 @@ export default function HomePage() {
                     <div className="font-semibold">
                       {v.placa}
                       {v.alias ? <span className="text-zinc-500 font-normal"> · {v.alias}</span> : null}
+                      {v.volumen_m3 ? <span className="ml-2 text-xs rounded bg-zinc-100 dark:bg-zinc-800 px-1.5 py-0.5 text-zinc-600 dark:text-zinc-400">{num(v.volumen_m3, 1)} m³</span> : null}
                     </div>
                     <div className="text-xs text-zinc-500 truncate">
                       {v.propietario ? <>prop: <span className="text-zinc-700 dark:text-zinc-300">{v.propietario}</span></> : "sin propietario"}
                       {v.conductor ? <> · cond: <span className="text-zinc-700 dark:text-zinc-300">{v.conductor}</span></> : null}
+                      {v.consorcio_actual ? <> · cons: <span className="text-zinc-700 dark:text-zinc-300">{v.consorcio_actual}</span></> : null}
                       {" · "}{money(v.precio_por_km)}/km
                     </div>
                   </div>
@@ -243,6 +307,15 @@ export default function HomePage() {
           )}
         </Card>
       </section>
+    </div>
+  );
+}
+
+function Mini({ label, value, className = "" }: { label: string; value: React.ReactNode; className?: string }) {
+  return (
+    <div>
+      <div className="text-xs text-zinc-500">{label}</div>
+      <div className={`font-medium ${className}`}>{value}</div>
     </div>
   );
 }

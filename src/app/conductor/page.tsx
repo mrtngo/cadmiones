@@ -13,12 +13,14 @@ function ConductorInner() {
   const [vehiculos, setVehiculos] = useState<Vehiculo[]>([]);
   const [registros, setRegistros] = useState<Registro[]>([]);
   const [placa, setPlaca] = useState(initialPlaca);
+  const [consorcio, setConsorcio] = useState("");
   const [desde, setDesde] = useState("");
   const [hasta, setHasta] = useState("");
 
   const [form, setForm] = useState({
     fecha: today(),
     placa: initialPlaca,
+    consorcio: "",
     km: "",
     gasto: "",
     precioGasolina: "",
@@ -26,14 +28,17 @@ function ConductorInner() {
   });
 
   async function loadVehiculos() {
-    const vs = await fetch("/api/vehiculos").then((r) => r.json());
+    const vs: Vehiculo[] = await fetch("/api/vehiculos").then((r) => r.json());
     setVehiculos(vs);
-    if (!form.placa && vs[0]) setForm((f) => ({ ...f, placa: vs[0].placa }));
+    if (!form.placa && vs[0]) {
+      setForm((f) => ({ ...f, placa: vs[0].placa, consorcio: vs[0].consorcio_actual ?? "" }));
+    }
   }
 
   async function loadRegistros() {
     const qs = new URLSearchParams();
     if (placa) qs.set("placa", placa);
+    if (consorcio) qs.set("consorcio", consorcio);
     if (desde) qs.set("desde", desde);
     if (hasta) qs.set("hasta", hasta);
     const rs = await fetch(`/api/registros?${qs}`).then((r) => r.json());
@@ -41,7 +46,13 @@ function ConductorInner() {
   }
 
   useEffect(() => { loadVehiculos(); }, []);
-  useEffect(() => { loadRegistros(); }, [placa, desde, hasta]);
+  useEffect(() => { loadRegistros(); }, [placa, consorcio, desde, hasta]);
+
+  // Cuando cambia la placa del form, prefilleamos consorcio con el del vehículo
+  function pickPlaca(p: string) {
+    const v = vehiculos.find((x) => x.placa === p);
+    setForm((f) => ({ ...f, placa: p, consorcio: v?.consorcio_actual ?? f.consorcio }));
+  }
 
   async function addRegistro(e: React.FormEvent) {
     e.preventDefault();
@@ -51,6 +62,7 @@ function ConductorInner() {
       body: JSON.stringify({
         fecha: form.fecha,
         placa: form.placa,
+        consorcio: form.consorcio || null,
         km_recorridos: Number(form.km || 0),
         gasto_gasolina: Number(form.gasto || 0),
         precio_gasolina: form.precioGasolina ? Number(form.precioGasolina) : null,
@@ -78,6 +90,13 @@ function ConductorInner() {
     return { km, gasto, dias, costoPorKm: km ? gasto / km : 0 };
   }, [registros]);
 
+  const consorciosKnown = useMemo(() => {
+    const s = new Set<string>();
+    for (const v of vehiculos) if (v.consorcio_actual) s.add(v.consorcio_actual);
+    for (const r of registros) if (r.consorcio) s.add(r.consorcio);
+    return [...s];
+  }, [vehiculos, registros]);
+
   return (
     <div className="space-y-6">
       <section>
@@ -87,10 +106,17 @@ function ConductorInner() {
 
       <Card>
         <H2>Filtros</H2>
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
           <div>
             <Label>Placa</Label>
             <VehiculoSelector value={placa} vehiculos={vehiculos} onChange={setPlaca} />
+          </div>
+          <div>
+            <Label>Consorcio</Label>
+            <input className={inputCls} value={consorcio} onChange={(e) => setConsorcio(e.target.value)} placeholder="Todos" list="conductor-cons-list" />
+            <datalist id="conductor-cons-list">
+              {consorciosKnown.map((c) => <option key={c} value={c} />)}
+            </datalist>
           </div>
           <div>
             <Label>Desde</Label>
@@ -120,7 +146,14 @@ function ConductorInner() {
             </div>
             <div>
               <Label>Placa</Label>
-              <VehiculoSelector value={form.placa} vehiculos={vehiculos} onChange={(p) => setForm({ ...form, placa: p })} allowAll={false} />
+              <VehiculoSelector value={form.placa} vehiculos={vehiculos} onChange={pickPlaca} allowAll={false} />
+            </div>
+            <div>
+              <Label>Consorcio</Label>
+              <input className={inputCls} value={form.consorcio} onChange={(e) => setForm({ ...form, consorcio: e.target.value })} placeholder="Constructora X" list="conductor-form-cons" />
+              <datalist id="conductor-form-cons">
+                {consorciosKnown.map((c) => <option key={c} value={c} />)}
+              </datalist>
             </div>
             <div>
               <Label>Km recorridos</Label>
@@ -153,6 +186,7 @@ function ConductorInner() {
                   <tr>
                     <th className="py-2 pr-3">Fecha</th>
                     <th className="py-2 pr-3">Placa</th>
+                    <th className="py-2 pr-3">Consorcio</th>
                     <th className="py-2 pr-3 text-right">Km</th>
                     <th className="py-2 pr-3 text-right">Gasto</th>
                     <th className="py-2 pr-3 text-right">Precio gas</th>
@@ -165,6 +199,7 @@ function ConductorInner() {
                     <tr key={r.id}>
                       <td className="py-2 pr-3 whitespace-nowrap">{r.fecha}</td>
                       <td className="py-2 pr-3 font-medium">{r.placa}</td>
+                      <td className="py-2 pr-3 text-zinc-500">{r.consorcio ?? "—"}</td>
                       <td className="py-2 pr-3 text-right">{num(r.km_recorridos, 1)}</td>
                       <td className="py-2 pr-3 text-right">{money(r.gasto_gasolina)}</td>
                       <td className="py-2 pr-3 text-right text-zinc-500">{r.precio_gasolina ? money(r.precio_gasolina) : "—"}</td>

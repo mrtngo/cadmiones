@@ -15,20 +15,28 @@ function trimOrNull(v: unknown): string | null {
   return s ? s : null;
 }
 
+function numOrNull(v: unknown): number | null {
+  if (v === "" || v == null) return null;
+  const n = Number(v);
+  return Number.isFinite(n) ? n : null;
+}
+
 export async function POST(req: Request) {
   const body = await req.json();
   const placa = String(body.placa ?? "").trim().toUpperCase();
   const alias = trimOrNull(body.alias);
   const conductor = trimOrNull(body.conductor);
   const propietario = trimOrNull(body.propietario);
+  const volumen_m3 = numOrNull(body.volumen_m3);
+  const consorcio_actual = trimOrNull(body.consorcio_actual);
   const precio_por_km = Number(body.precio_por_km ?? 0);
 
   if (!placa) return NextResponse.json({ error: "placa requerida" }, { status: 400 });
 
   try {
     await sql`
-      INSERT INTO vehiculos (placa, alias, conductor, propietario, precio_por_km)
-      VALUES (${placa}, ${alias}, ${conductor}, ${propietario}, ${precio_por_km})
+      INSERT INTO vehiculos (placa, alias, conductor, propietario, volumen_m3, consorcio_actual, precio_por_km)
+      VALUES (${placa}, ${alias}, ${conductor}, ${propietario}, ${volumen_m3}, ${consorcio_actual}, ${precio_por_km})
     `;
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : "error";

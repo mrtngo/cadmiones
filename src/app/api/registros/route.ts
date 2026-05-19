@@ -5,6 +5,7 @@ import type { Registro } from "@/lib/types";
 export async function GET(req: Request) {
   const { searchParams } = new URL(req.url);
   const placa = searchParams.get("placa");
+  const consorcio = searchParams.get("consorcio");
   const desde = searchParams.get("desde");
   const hasta = searchParams.get("hasta");
 
@@ -12,6 +13,7 @@ export async function GET(req: Request) {
     SELECT * FROM registros
     WHERE TRUE
       ${placa ? sql`AND placa = ${placa.toUpperCase()}` : sql``}
+      ${consorcio ? sql`AND consorcio = ${consorcio}` : sql``}
       ${desde ? sql`AND fecha >= ${desde}` : sql``}
       ${hasta ? sql`AND fecha <= ${hasta}` : sql``}
     ORDER BY fecha DESC, id DESC
@@ -23,6 +25,7 @@ export async function POST(req: Request) {
   const body = await req.json();
   const fecha = String(body.fecha ?? "").trim();
   const placa = String(body.placa ?? "").trim().toUpperCase();
+  const consorcio = body.consorcio ? String(body.consorcio).trim() || null : null;
   const km_recorridos = Number(body.km_recorridos ?? 0);
   const gasto_gasolina = Number(body.gasto_gasolina ?? 0);
   const precio_gasolina = body.precio_gasolina === "" || body.precio_gasolina == null
@@ -34,8 +37,8 @@ export async function POST(req: Request) {
   if (!placa) return NextResponse.json({ error: "placa requerida" }, { status: 400 });
 
   const [row] = await sql<Registro[]>`
-    INSERT INTO registros (fecha, placa, km_recorridos, gasto_gasolina, precio_gasolina, notas)
-    VALUES (${fecha}, ${placa}, ${km_recorridos}, ${gasto_gasolina}, ${precio_gasolina}, ${notas})
+    INSERT INTO registros (fecha, placa, consorcio, km_recorridos, gasto_gasolina, precio_gasolina, notas)
+    VALUES (${fecha}, ${placa}, ${consorcio}, ${km_recorridos}, ${gasto_gasolina}, ${precio_gasolina}, ${notas})
     RETURNING *
   `;
   return NextResponse.json(row, { status: 201 });

@@ -9,17 +9,20 @@ import type { Vehiculo, Registro, Anticipo } from "@/lib/types";
 function ClienteInner() {
   const search = useSearchParams();
   const initialPlaca = (search.get("placa") ?? "").toUpperCase();
+  const initialConsorcio = search.get("consorcio") ?? "";
 
   const [vehiculos, setVehiculos] = useState<Vehiculo[]>([]);
   const [registros, setRegistros] = useState<Registro[]>([]);
   const [anticipos, setAnticipos] = useState<Anticipo[]>([]);
   const [placa, setPlaca] = useState(initialPlaca);
+  const [consorcio, setConsorcio] = useState(initialConsorcio);
   const [desde, setDesde] = useState("");
   const [hasta, setHasta] = useState("");
 
   const [form, setForm] = useState({
     fecha: today(),
     placa: initialPlaca,
+    consorcio: initialConsorcio,
     monto: "",
     notas: "",
   });
@@ -27,12 +30,19 @@ function ClienteInner() {
   async function loadVehiculos() {
     const vs: Vehiculo[] = await fetch("/api/vehiculos").then((r) => r.json());
     setVehiculos(vs);
-    if (!form.placa && vs[0]) setForm((f) => ({ ...f, placa: vs[0].placa }));
+    if (!form.placa && vs[0]) {
+      setForm((f) => ({
+        ...f,
+        placa: vs[0].placa,
+        consorcio: f.consorcio || vs[0].consorcio_actual || "",
+      }));
+    }
   }
 
   async function loadData() {
     const qs = new URLSearchParams();
     if (placa) qs.set("placa", placa);
+    if (consorcio) qs.set("consorcio", consorcio);
     if (desde) qs.set("desde", desde);
     if (hasta) qs.set("hasta", hasta);
     const [rs, as] = await Promise.all([
@@ -44,7 +54,12 @@ function ClienteInner() {
   }
 
   useEffect(() => { loadVehiculos(); }, []);
-  useEffect(() => { loadData(); }, [placa, desde, hasta]);
+  useEffect(() => { loadData(); }, [placa, consorcio, desde, hasta]);
+
+  function pickPlaca(p: string) {
+    const v = vehiculos.find((x) => x.placa === p);
+    setForm((f) => ({ ...f, placa: p, consorcio: v?.consorcio_actual ?? f.consorcio }));
+  }
 
   async function addAnticipo(e: React.FormEvent) {
     e.preventDefault();
@@ -54,6 +69,7 @@ function ClienteInner() {
       body: JSON.stringify({
         fecha: form.fecha,
         placa: form.placa,
+        consorcio: form.consorcio || null,
         monto: Number(form.monto || 0),
         notas: form.notas || null,
       }),
@@ -88,6 +104,14 @@ function ClienteInner() {
     return { km, ingreso, anticipos: ant, neto: ingreso - ant };
   }, [registros, anticipos, tarifaByPlaca]);
 
+  const consorciosKnown = useMemo(() => {
+    const s = new Set<string>();
+    for (const v of vehiculos) if (v.consorcio_actual) s.add(v.consorcio_actual);
+    for (const r of registros) if (r.consorcio) s.add(r.consorcio);
+    for (const a of anticipos) if (a.consorcio) s.add(a.consorcio);
+    return [...s];
+  }, [vehiculos, registros, anticipos]);
+
   return (
     <div className="space-y-6">
       <section>
@@ -97,10 +121,17 @@ function ClienteInner() {
 
       <Card>
         <H2>Filtros</H2>
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
           <div>
             <Label>Placa</Label>
             <VehiculoSelector value={placa} vehiculos={vehiculos} onChange={setPlaca} />
+          </div>
+          <div>
+            <Label>Consorcio</Label>
+            <input className={inputCls} value={consorcio} onChange={(e) => setConsorcio(e.target.value)} placeholder="Todos" list="cliente-cons-list" />
+            <datalist id="cliente-cons-list">
+              {consorciosKnown.map((c) => <option key={c} value={c} />)}
+            </datalist>
           </div>
           <div>
             <Label>Desde</Label>
@@ -130,7 +161,14 @@ function ClienteInner() {
             </div>
             <div>
               <Label>Placa</Label>
-              <VehiculoSelector value={form.placa} vehiculos={vehiculos} onChange={(p) => setForm({ ...form, placa: p })} allowAll={false} />
+              <VehiculoSelector value={form.placa} vehiculos={vehiculos} onChange={pickPlaca} allowAll={false} />
+            </div>
+            <div>
+              <Label>Consorcio</Label>
+              <input className={inputCls} value={form.consorcio} onChange={(e) => setForm({ ...form, consorcio: e.target.value })} placeholder="Constructora X" list="cliente-form-cons" />
+              <datalist id="cliente-form-cons">
+                {consorciosKnown.map((c) => <option key={c} value={c} />)}
+              </datalist>
             </div>
             <div>
               <Label>Monto</Label>
@@ -155,6 +193,7 @@ function ClienteInner() {
                   <tr>
                     <th className="py-2 pr-3">Fecha</th>
                     <th className="py-2 pr-3">Placa</th>
+                    <th className="py-2 pr-3">Consorcio</th>
                     <th className="py-2 pr-3 text-right">Km</th>
                     <th className="py-2 pr-3 text-right">Tarifa</th>
                     <th className="py-2 pr-3 text-right">Subtotal</th>
@@ -167,6 +206,7 @@ function ClienteInner() {
                       <tr key={r.id}>
                         <td className="py-2 pr-3 whitespace-nowrap">{r.fecha}</td>
                         <td className="py-2 pr-3 font-medium">{r.placa}</td>
+                        <td className="py-2 pr-3 text-zinc-500">{r.consorcio ?? "—"}</td>
                         <td className="py-2 pr-3 text-right">{num(r.km_recorridos, 1)}</td>
                         <td className="py-2 pr-3 text-right text-zinc-500">{money(tarifa)}</td>
                         <td className="py-2 pr-3 text-right font-medium">{money(r.km_recorridos * tarifa)}</td>
@@ -190,6 +230,7 @@ function ClienteInner() {
                   <tr>
                     <th className="py-2 pr-3">Fecha</th>
                     <th className="py-2 pr-3">Placa</th>
+                    <th className="py-2 pr-3">Consorcio</th>
                     <th className="py-2 pr-3 text-right">Monto</th>
                     <th className="py-2 pr-3">Notas</th>
                     <th className="py-2"></th>
@@ -200,6 +241,7 @@ function ClienteInner() {
                     <tr key={a.id}>
                       <td className="py-2 pr-3 whitespace-nowrap">{a.fecha}</td>
                       <td className="py-2 pr-3 font-medium">{a.placa}</td>
+                      <td className="py-2 pr-3 text-zinc-500">{a.consorcio ?? "—"}</td>
                       <td className="py-2 pr-3 text-right">{money(a.monto)}</td>
                       <td className="py-2 pr-3 text-zinc-500">{a.notas ?? ""}</td>
                       <td className="py-2 text-right">
