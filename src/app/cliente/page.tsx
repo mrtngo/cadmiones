@@ -4,6 +4,7 @@ import { useSearchParams } from "next/navigation";
 import { Card, H2, Label, Stat, btnCls, inputCls } from "@/components/ui";
 import { VehiculoSelector } from "@/components/VehiculoSelector";
 import { money, num, today } from "@/lib/format";
+import { cobradoDeRegistro, facturadoDeRegistro, totalesRegistros, vehiculosByPlaca } from "@/lib/calc";
 import type { Vehiculo, Registro, Anticipo } from "@/lib/types";
 
 function ClienteInner() {
@@ -88,21 +89,9 @@ function ClienteInner() {
     loadData();
   }
 
-  const tarifaByPlaca = useMemo(() => {
-    const m = new Map<string, number>();
-    vehiculos.forEach((v) => m.set(v.placa, v.precio_por_km));
-    return m;
-  }, [vehiculos]);
-
-  const totales = useMemo(() => {
-    const km = registros.reduce((s, r) => s + r.km_recorridos, 0);
-    const ingreso = registros.reduce(
-      (s, r) => s + r.km_recorridos * (tarifaByPlaca.get(r.placa) ?? 0),
-      0
-    );
-    const ant = anticipos.reduce((s, a) => s + a.monto, 0);
-    return { km, ingreso, anticipos: ant, neto: ingreso - ant };
-  }, [registros, anticipos, tarifaByPlaca]);
+  const vByPlaca = useMemo(() => vehiculosByPlaca(vehiculos), [vehiculos]);
+  const totales = useMemo(() => totalesRegistros(registros, vByPlaca), [registros, vByPlaca]);
+  const totalAnticipos = useMemo(() => anticipos.reduce((s, a) => s + a.monto, 0), [anticipos]);
 
   const consorciosKnown = useMemo(() => {
     const s = new Set<string>();
@@ -116,7 +105,7 @@ function ClienteInner() {
     <div className="space-y-6">
       <section>
         <h1 className="text-2xl font-bold tracking-tight">Vista cliente</h1>
-        <p className="text-sm text-zinc-500 mt-1">Ingreso por km × tarifa, menos anticipos pagados.</p>
+        <p className="text-sm text-zinc-500 mt-1">Facturado al consorcio menos anticipos = por cobrar. Cobrado = lo que pagás al conductor.</p>
       </section>
 
       <Card>
@@ -144,11 +133,12 @@ function ClienteInner() {
         </div>
       </Card>
 
-      <section className="grid grid-cols-2 md:grid-cols-4 gap-3">
-        <Stat label="Km facturables" value={num(totales.km)} />
-        <Stat label="Ingreso bruto" value={money(totales.ingreso)} hint="km × precio/km" />
-        <Stat label="Anticipos" value={money(totales.anticipos)} />
-        <Stat label="Neto a cobrar" value={money(totales.neto)} hint="bruto − anticipos" />
+      <section className="grid grid-cols-2 md:grid-cols-5 gap-3">
+        <Stat label="Km" value={num(totales.km)} />
+        <Stat label="Facturado" value={money(totales.facturado)} hint="m³ × km × tarifa" />
+        <Stat label="Cobrado (conductor)" value={money(totales.cobrado)} />
+        <Stat label="Anticipos" value={money(totalAnticipos)} />
+        <Stat label="Por cobrar" value={money(totales.facturado - totalAnticipos)} hint="fact − anticipos" />
       </section>
 
       <section className="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -183,9 +173,9 @@ function ClienteInner() {
         </Card>
 
         <Card className="lg:col-span-2">
-          <H2>Facturable por día</H2>
+          <H2>Viajes</H2>
           {registros.length === 0 ? (
-            <p className="text-sm text-zinc-500">Sin registros para el filtro actual.</p>
+            <p className="text-sm text-zinc-500">Sin viajes para el filtro actual.</p>
           ) : (
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
@@ -193,23 +183,23 @@ function ClienteInner() {
                   <tr>
                     <th className="py-2 pr-3">Fecha</th>
                     <th className="py-2 pr-3">Placa</th>
-                    <th className="py-2 pr-3">Consorcio</th>
+                    <th className="py-2 pr-3">Ruta</th>
                     <th className="py-2 pr-3 text-right">Km</th>
-                    <th className="py-2 pr-3 text-right">Tarifa</th>
-                    <th className="py-2 pr-3 text-right">Subtotal</th>
+                    <th className="py-2 pr-3 text-right">Facturado</th>
+                    <th className="py-2 pr-3 text-right">Cobrado</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-zinc-200 dark:divide-zinc-800">
                   {registros.map((r) => {
-                    const tarifa = tarifaByPlaca.get(r.placa) ?? 0;
+                    const v = vByPlaca.get(r.placa);
                     return (
                       <tr key={r.id}>
                         <td className="py-2 pr-3 whitespace-nowrap">{r.fecha}</td>
                         <td className="py-2 pr-3 font-medium">{r.placa}</td>
-                        <td className="py-2 pr-3 text-zinc-500">{r.consorcio ?? "—"}</td>
+                        <td className="py-2 pr-3 text-zinc-500">{r.ruta_nombre ?? (r.consorcio ?? "—")}</td>
                         <td className="py-2 pr-3 text-right">{num(r.km_recorridos, 1)}</td>
-                        <td className="py-2 pr-3 text-right text-zinc-500">{money(tarifa)}</td>
-                        <td className="py-2 pr-3 text-right font-medium">{money(r.km_recorridos * tarifa)}</td>
+                        <td className="py-2 pr-3 text-right">{money(facturadoDeRegistro(r, v))}</td>
+                        <td className="py-2 pr-3 text-right">{money(cobradoDeRegistro(r, v))}</td>
                       </tr>
                     );
                   })}

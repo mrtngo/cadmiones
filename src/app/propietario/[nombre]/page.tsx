@@ -3,6 +3,7 @@ import { use, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { Card, H2, Label, Stat, btnGhostCls, inputCls } from "@/components/ui";
 import { money, num } from "@/lib/format";
+import { totalesRegistros, vehiculosByPlaca } from "@/lib/calc";
 import type { Vehiculo, Registro, Anticipo } from "@/lib/types";
 
 export default function PropietarioPage({
@@ -37,30 +38,23 @@ export default function PropietarioPage({
 
   const mine = useMemo(() => vehiculos.filter((v) => (v.propietario ?? "") === nombre), [vehiculos, nombre]);
   const placas = useMemo(() => new Set(mine.map((v) => v.placa)), [mine]);
-  const tarifa = useMemo(() => new Map(mine.map((v) => [v.placa, v.precio_por_km])), [mine]);
+  const vByPlaca = useMemo(() => vehiculosByPlaca(mine), [mine]);
 
   const myRegistros = useMemo(() => registros.filter((r) => placas.has(r.placa)), [registros, placas]);
   const myAnticipos = useMemo(() => anticipos.filter((a) => placas.has(a.placa)), [anticipos, placas]);
 
-  const totals = useMemo(() => {
-    const km = myRegistros.reduce((s, r) => s + r.km_recorridos, 0);
-    const gasto = myRegistros.reduce((s, r) => s + r.gasto_gasolina, 0);
-    const ingreso = myRegistros.reduce((s, r) => s + r.km_recorridos * (tarifa.get(r.placa) ?? 0), 0);
-    const ant = myAnticipos.reduce((s, a) => s + a.monto, 0);
-    return { km, gasto, ingreso, anticipos: ant, neto: ingreso - ant };
-  }, [myRegistros, myAnticipos, tarifa]);
+  const totales = useMemo(() => totalesRegistros(myRegistros, vByPlaca), [myRegistros, vByPlaca]);
+  const totalAnticipos = useMemo(() => myAnticipos.reduce((s, a) => s + a.monto, 0), [myAnticipos]);
 
   const perPlaca = useMemo(() => {
     return mine.map((v) => {
       const rs = myRegistros.filter((r) => r.placa === v.placa);
       const as = myAnticipos.filter((a) => a.placa === v.placa);
-      const km = rs.reduce((s, r) => s + r.km_recorridos, 0);
-      const gasto = rs.reduce((s, r) => s + r.gasto_gasolina, 0);
-      const ingreso = km * v.precio_por_km;
+      const t = totalesRegistros(rs, vByPlaca);
       const ant = as.reduce((s, a) => s + a.monto, 0);
-      return { v, km, gasto, ingreso, anticipos: ant, neto: ingreso - ant };
+      return { v, ...t, anticipos: ant, porCobrar: t.facturado - ant };
     });
-  }, [mine, myRegistros, myAnticipos]);
+  }, [mine, myRegistros, myAnticipos, vByPlaca]);
 
   return (
     <div className="space-y-6">
@@ -87,11 +81,11 @@ export default function PropietarioPage({
       </Card>
 
       <section className="grid grid-cols-2 md:grid-cols-5 gap-3">
-        <Stat label="Km" value={num(totals.km)} />
-        <Stat label="Ingreso bruto" value={money(totals.ingreso)} />
-        <Stat label="Anticipos" value={money(totals.anticipos)} />
-        <Stat label="Neto a cobrar" value={money(totals.neto)} hint="bruto − anticipos" />
-        <Stat label="Gasto gasolina" value={money(totals.gasto)} />
+        <Stat label="Km" value={num(totales.km)} />
+        <Stat label="Facturado" value={money(totales.facturado)} />
+        <Stat label="Cobrado conductor" value={money(totales.cobrado)} />
+        <Stat label="Anticipos" value={money(totalAnticipos)} />
+        <Stat label="Por cobrar" value={money(totales.facturado - totalAnticipos)} hint="fact − anticipos" />
       </section>
 
       <Card>
@@ -105,13 +99,12 @@ export default function PropietarioPage({
                 <tr>
                   <th className="py-2 pr-3">Placa</th>
                   <th className="py-2 pr-3">Conductor</th>
-                  <th className="py-2 pr-3">Alias</th>
-                  <th className="py-2 pr-3 text-right">Tarifa</th>
+                  <th className="py-2 pr-3">Consorcio actual</th>
                   <th className="py-2 pr-3 text-right">Km</th>
-                  <th className="py-2 pr-3 text-right">Ingreso</th>
+                  <th className="py-2 pr-3 text-right">Facturado</th>
+                  <th className="py-2 pr-3 text-right">Cobrado</th>
                   <th className="py-2 pr-3 text-right">Anticipos</th>
-                  <th className="py-2 pr-3 text-right">Neto</th>
-                  <th className="py-2 pr-3 text-right">Gasto</th>
+                  <th className="py-2 pr-3 text-right">Por cobrar</th>
                   <th className="py-2"></th>
                 </tr>
               </thead>
@@ -120,13 +113,12 @@ export default function PropietarioPage({
                   <tr key={p.v.placa}>
                     <td className="py-2 pr-3 font-semibold">{p.v.placa}</td>
                     <td className="py-2 pr-3 text-zinc-500">{p.v.conductor ?? "—"}</td>
-                    <td className="py-2 pr-3 text-zinc-500">{p.v.alias ?? "—"}</td>
-                    <td className="py-2 pr-3 text-right text-zinc-500">{money(p.v.precio_por_km)}</td>
+                    <td className="py-2 pr-3 text-zinc-500">{p.v.consorcio_actual ?? "—"}</td>
                     <td className="py-2 pr-3 text-right">{num(p.km, 1)}</td>
-                    <td className="py-2 pr-3 text-right">{money(p.ingreso)}</td>
+                    <td className="py-2 pr-3 text-right">{money(p.facturado)}</td>
+                    <td className="py-2 pr-3 text-right">{money(p.cobrado)}</td>
                     <td className="py-2 pr-3 text-right">{money(p.anticipos)}</td>
-                    <td className={`py-2 pr-3 text-right font-semibold ${p.neto >= 0 ? "" : "text-red-600"}`}>{money(p.neto)}</td>
-                    <td className="py-2 pr-3 text-right text-zinc-500">{money(p.gasto)}</td>
+                    <td className={`py-2 pr-3 text-right font-semibold ${p.porCobrar >= 0 ? "" : "text-red-600"}`}>{money(p.porCobrar)}</td>
                     <td className="py-2 text-right">
                       <Link href={`/cliente?placa=${p.v.placa}`} className={btnGhostCls}>Cliente</Link>
                     </td>
@@ -149,6 +141,7 @@ export default function PropietarioPage({
                 <tr>
                   <th className="py-2 pr-3">Fecha</th>
                   <th className="py-2 pr-3">Placa</th>
+                  <th className="py-2 pr-3">Consorcio</th>
                   <th className="py-2 pr-3 text-right">Monto</th>
                   <th className="py-2 pr-3">Notas</th>
                 </tr>
@@ -158,6 +151,7 @@ export default function PropietarioPage({
                   <tr key={a.id}>
                     <td className="py-2 pr-3 whitespace-nowrap">{a.fecha}</td>
                     <td className="py-2 pr-3 font-medium">{a.placa}</td>
+                    <td className="py-2 pr-3 text-zinc-500">{a.consorcio ?? "—"}</td>
                     <td className="py-2 pr-3 text-right">{money(a.monto)}</td>
                     <td className="py-2 pr-3 text-zinc-500">{a.notas ?? ""}</td>
                   </tr>

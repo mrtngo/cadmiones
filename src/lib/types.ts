@@ -9,11 +9,24 @@ export type Vehiculo = {
   created_at: string;
 };
 
+export type Ruta = {
+  id: number;
+  consorcio: string;
+  nombre: string;
+  precio_facturado_m3km: number;
+  precio_cobrado_m3km: number;
+  created_at: string;
+};
+
 export type Registro = {
   id: number;
   fecha: string;
   placa: string;
   consorcio: string | null;
+  ruta_id: number | null;
+  ruta_nombre: string | null;
+  precio_facturado_m3km: number | null;
+  precio_cobrado_m3km: number | null;
   km_recorridos: number;
   gasto_gasolina: number;
   precio_gasolina: number | null;

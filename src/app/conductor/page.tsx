@@ -1,10 +1,12 @@
 "use client";
 import { Suspense, useEffect, useMemo, useState } from "react";
+import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { Card, H2, Label, Stat, btnCls, inputCls } from "@/components/ui";
 import { VehiculoSelector } from "@/components/VehiculoSelector";
 import { money, num, today } from "@/lib/format";
-import type { Vehiculo, Registro } from "@/lib/types";
+import { cobradoDeRegistro, facturadoDeRegistro, totalesRegistros, vehiculosByPlaca } from "@/lib/calc";
+import type { Vehiculo, Registro, Ruta } from "@/lib/types";
 
 function ConductorInner() {
   const search = useSearchParams();
@@ -12,6 +14,7 @@ function ConductorInner() {
 
   const [vehiculos, setVehiculos] = useState<Vehiculo[]>([]);
   const [registros, setRegistros] = useState<Registro[]>([]);
+  const [rutas, setRutas] = useState<Ruta[]>([]);
   const [placa, setPlaca] = useState(initialPlaca);
   const [consorcio, setConsorcio] = useState("");
   const [desde, setDesde] = useState("");
@@ -20,7 +23,7 @@ function ConductorInner() {
   const [form, setForm] = useState({
     fecha: today(),
     placa: initialPlaca,
-    consorcio: "",
+    ruta_id: "",
     km: "",
     gasto: "",
     precioGasolina: "",
@@ -30,9 +33,12 @@ function ConductorInner() {
   async function loadVehiculos() {
     const vs: Vehiculo[] = await fetch("/api/vehiculos").then((r) => r.json());
     setVehiculos(vs);
-    if (!form.placa && vs[0]) {
-      setForm((f) => ({ ...f, placa: vs[0].placa, consorcio: vs[0].consorcio_actual ?? "" }));
-    }
+    if (!form.placa && vs[0]) setForm((f) => ({ ...f, placa: vs[0].placa }));
+  }
+
+  async function loadRutas() {
+    const rt: Ruta[] = await fetch("/api/rutas").then((r) => r.json());
+    setRutas(rt);
   }
 
   async function loadRegistros() {
@@ -45,14 +51,21 @@ function ConductorInner() {
     setRegistros(rs);
   }
 
-  useEffect(() => { loadVehiculos(); }, []);
+  useEffect(() => { loadVehiculos(); loadRutas(); }, []);
   useEffect(() => { loadRegistros(); }, [placa, consorcio, desde, hasta]);
 
-  // Cuando cambia la placa del form, prefilleamos consorcio con el del vehículo
-  function pickPlaca(p: string) {
-    const v = vehiculos.find((x) => x.placa === p);
-    setForm((f) => ({ ...f, placa: p, consorcio: v?.consorcio_actual ?? f.consorcio }));
-  }
+  const vByPlaca = useMemo(() => vehiculosByPlaca(vehiculos), [vehiculos]);
+  const vehiculoForm = useMemo(() => vByPlaca.get(form.placa), [vByPlaca, form.placa]);
+  const consorcioForm = vehiculoForm?.consorcio_actual ?? null;
+  const rutasForm = useMemo(
+    () => (consorcioForm ? rutas.filter((r) => r.consorcio === consorcioForm) : []),
+    [rutas, consorcioForm]
+  );
+
+  // Si cambia la placa, reseteamos la ruta seleccionada (puede no aplicar al nuevo consorcio)
+  useEffect(() => {
+    setForm((f) => ({ ...f, ruta_id: "" }));
+  }, [form.placa]);
 
   async function addRegistro(e: React.FormEvent) {
     e.preventDefault();
@@ -62,7 +75,7 @@ function ConductorInner() {
       body: JSON.stringify({
         fecha: form.fecha,
         placa: form.placa,
-        consorcio: form.consorcio || null,
+        ruta_id: form.ruta_id ? Number(form.ruta_id) : null,
         km_recorridos: Number(form.km || 0),
         gasto_gasolina: Number(form.gasto || 0),
         precio_gasolina: form.precioGasolina ? Number(form.precioGasolina) : null,
@@ -78,17 +91,13 @@ function ConductorInner() {
   }
 
   async function delRegistro(id: number) {
-    if (!confirm("Eliminar registro?")) return;
+    if (!confirm("Eliminar viaje?")) return;
     await fetch(`/api/registros/${id}`, { method: "DELETE" });
     loadRegistros();
   }
 
-  const totales = useMemo(() => {
-    const km = registros.reduce((s, r) => s + r.km_recorridos, 0);
-    const gasto = registros.reduce((s, r) => s + r.gasto_gasolina, 0);
-    const dias = new Set(registros.map((r) => r.fecha)).size;
-    return { km, gasto, dias, costoPorKm: km ? gasto / km : 0 };
-  }, [registros]);
+  const totales = useMemo(() => totalesRegistros(registros, vByPlaca), [registros, vByPlaca]);
+  const dias = useMemo(() => new Set(registros.map((r) => r.fecha)).size, [registros]);
 
   const consorciosKnown = useMemo(() => {
     const s = new Set<string>();
@@ -97,11 +106,20 @@ function ConductorInner() {
     return [...s];
   }, [vehiculos, registros]);
 
+  const rutaSel = useMemo(
+    () => (form.ruta_id ? rutas.find((r) => r.id === Number(form.ruta_id)) : undefined),
+    [form.ruta_id, rutas]
+  );
+  const previewKm = Number(form.km || 0);
+  const previewM3 = vehiculoForm?.volumen_m3 ?? 0;
+  const previewFacturado = rutaSel ? previewM3 * previewKm * rutaSel.precio_facturado_m3km : 0;
+  const previewCobrado = rutaSel ? previewM3 * previewKm * rutaSel.precio_cobrado_m3km : 0;
+
   return (
     <div className="space-y-6">
       <section>
         <h1 className="text-2xl font-bold tracking-tight">Vista conductor</h1>
-        <p className="text-sm text-zinc-500 mt-1">Km recorridos y gasto de gasolina por día.</p>
+        <p className="text-sm text-zinc-500 mt-1">Viajes por día. Un camión puede tener varias rutas en un mismo día.</p>
       </section>
 
       <Card>
@@ -129,16 +147,17 @@ function ConductorInner() {
         </div>
       </Card>
 
-      <section className="grid grid-cols-2 md:grid-cols-4 gap-3">
-        <Stat label="Km recorridos" value={num(totales.km)} />
+      <section className="grid grid-cols-2 md:grid-cols-5 gap-3">
+        <Stat label="Km" value={num(totales.km)} />
+        <Stat label="Cobrado (a conductor)" value={money(totales.cobrado)} hint="m³ × km × tarifa" />
         <Stat label="Gasto gasolina" value={money(totales.gasto)} />
-        <Stat label="Costo por km" value={money(totales.costoPorKm)} hint="gasto ÷ km" />
-        <Stat label="Días con registro" value={num(totales.dias)} />
+        <Stat label="Costo / km" value={money(totales.km ? totales.gasto / totales.km : 0)} hint="gasto ÷ km" />
+        <Stat label="Días con viaje" value={num(dias)} />
       </section>
 
       <section className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <Card className="lg:col-span-1">
-          <H2>Registrar día</H2>
+          <H2>Registrar viaje</H2>
           <form onSubmit={addRegistro} className="space-y-3">
             <div>
               <Label>Fecha</Label>
@@ -146,21 +165,56 @@ function ConductorInner() {
             </div>
             <div>
               <Label>Placa</Label>
-              <VehiculoSelector value={form.placa} vehiculos={vehiculos} onChange={pickPlaca} allowAll={false} />
+              <VehiculoSelector value={form.placa} vehiculos={vehiculos} onChange={(p) => setForm({ ...form, placa: p })} allowAll={false} />
+              {vehiculoForm ? (
+                <p className="text-xs text-zinc-500 mt-1">
+                  {vehiculoForm.volumen_m3 ? `${num(vehiculoForm.volumen_m3, 1)} m³ · ` : ""}
+                  consorcio: <strong>{consorcioForm ?? "—"}</strong>
+                </p>
+              ) : null}
             </div>
             <div>
-              <Label>Consorcio</Label>
-              <input className={inputCls} value={form.consorcio} onChange={(e) => setForm({ ...form, consorcio: e.target.value })} placeholder="Constructora X" list="conductor-form-cons" />
-              <datalist id="conductor-form-cons">
-                {consorciosKnown.map((c) => <option key={c} value={c} />)}
-              </datalist>
+              <Label>Ruta</Label>
+              {consorcioForm ? (
+                rutasForm.length > 0 ? (
+                  <select
+                    className={inputCls}
+                    value={form.ruta_id}
+                    onChange={(e) => setForm({ ...form, ruta_id: e.target.value })}
+                  >
+                    <option value="">— Sin ruta —</option>
+                    {rutasForm.map((r) => (
+                      <option key={r.id} value={r.id}>
+                        {r.nombre} · fact {money(r.precio_facturado_m3km)} / cobr {money(r.precio_cobrado_m3km)}
+                      </option>
+                    ))}
+                  </select>
+                ) : (
+                  <p className="text-xs text-amber-600">
+                    Sin rutas en <strong>{consorcioForm}</strong>.{" "}
+                    <Link className="underline" href={`/consorcio/${encodeURIComponent(consorcioForm)}`}>
+                      Crear ruta →
+                    </Link>
+                  </p>
+                )
+              ) : (
+                <p className="text-xs text-zinc-500">El vehículo no tiene consorcio asignado. Asignale uno desde el home antes de registrar viajes con ruta.</p>
+              )}
             </div>
             <div>
-              <Label>Km recorridos</Label>
+              <Label>Km del viaje</Label>
               <input className={inputCls} type="number" step="0.1" value={form.km} onChange={(e) => setForm({ ...form, km: e.target.value })} placeholder="120" required />
             </div>
+            {rutaSel && previewKm > 0 ? (
+              <div className="rounded-md bg-zinc-50 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 p-3 text-xs space-y-1">
+                <div className="text-zinc-500">Vista previa: {num(previewM3, 1)} m³ × {num(previewKm, 1)} km</div>
+                <div className="flex justify-between"><span>Facturado</span><strong>{money(previewFacturado)}</strong></div>
+                <div className="flex justify-between"><span>Cobrado</span><strong>{money(previewCobrado)}</strong></div>
+                <div className="flex justify-between"><span>Margen bruto</span><strong>{money(previewFacturado - previewCobrado)}</strong></div>
+              </div>
+            ) : null}
             <div>
-              <Label>Gasto gasolina</Label>
+              <Label>Gasto gasolina (opcional)</Label>
               <input className={inputCls} type="number" step="0.01" value={form.gasto} onChange={(e) => setForm({ ...form, gasto: e.target.value })} placeholder="80000" />
             </div>
             <div>
@@ -169,16 +223,16 @@ function ConductorInner() {
             </div>
             <div>
               <Label>Notas</Label>
-              <input className={inputCls} value={form.notas} onChange={(e) => setForm({ ...form, notas: e.target.value })} placeholder="Ruta…" />
+              <input className={inputCls} value={form.notas} onChange={(e) => setForm({ ...form, notas: e.target.value })} placeholder="Observaciones…" />
             </div>
-            <button type="submit" className={btnCls}>Guardar registro</button>
+            <button type="submit" className={btnCls}>Guardar viaje</button>
           </form>
         </Card>
 
         <Card className="lg:col-span-2">
-          <H2>Registros</H2>
+          <H2>Viajes</H2>
           {registros.length === 0 ? (
-            <p className="text-sm text-zinc-500">Sin registros para el filtro actual.</p>
+            <p className="text-sm text-zinc-500">Sin viajes para el filtro actual.</p>
           ) : (
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
@@ -186,29 +240,32 @@ function ConductorInner() {
                   <tr>
                     <th className="py-2 pr-3">Fecha</th>
                     <th className="py-2 pr-3">Placa</th>
-                    <th className="py-2 pr-3">Consorcio</th>
+                    <th className="py-2 pr-3">Ruta</th>
                     <th className="py-2 pr-3 text-right">Km</th>
-                    <th className="py-2 pr-3 text-right">Gasto</th>
-                    <th className="py-2 pr-3 text-right">Precio gas</th>
-                    <th className="py-2 pr-3">Notas</th>
+                    <th className="py-2 pr-3 text-right">Facturado</th>
+                    <th className="py-2 pr-3 text-right">Cobrado</th>
+                    <th className="py-2 pr-3 text-right">Gasolina</th>
                     <th className="py-2"></th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-zinc-200 dark:divide-zinc-800">
-                  {registros.map((r) => (
-                    <tr key={r.id}>
-                      <td className="py-2 pr-3 whitespace-nowrap">{r.fecha}</td>
-                      <td className="py-2 pr-3 font-medium">{r.placa}</td>
-                      <td className="py-2 pr-3 text-zinc-500">{r.consorcio ?? "—"}</td>
-                      <td className="py-2 pr-3 text-right">{num(r.km_recorridos, 1)}</td>
-                      <td className="py-2 pr-3 text-right">{money(r.gasto_gasolina)}</td>
-                      <td className="py-2 pr-3 text-right text-zinc-500">{r.precio_gasolina ? money(r.precio_gasolina) : "—"}</td>
-                      <td className="py-2 pr-3 text-zinc-500">{r.notas ?? ""}</td>
-                      <td className="py-2 text-right">
-                        <button onClick={() => delRegistro(r.id)} className="text-xs text-red-600 hover:underline">eliminar</button>
-                      </td>
-                    </tr>
-                  ))}
+                  {registros.map((r) => {
+                    const v = vByPlaca.get(r.placa);
+                    return (
+                      <tr key={r.id}>
+                        <td className="py-2 pr-3 whitespace-nowrap">{r.fecha}</td>
+                        <td className="py-2 pr-3 font-medium">{r.placa}</td>
+                        <td className="py-2 pr-3 text-zinc-500">{r.ruta_nombre ?? (r.consorcio ?? "—")}</td>
+                        <td className="py-2 pr-3 text-right">{num(r.km_recorridos, 1)}</td>
+                        <td className="py-2 pr-3 text-right">{money(facturadoDeRegistro(r, v))}</td>
+                        <td className="py-2 pr-3 text-right">{money(cobradoDeRegistro(r, v))}</td>
+                        <td className="py-2 pr-3 text-right text-zinc-500">{money(r.gasto_gasolina)}</td>
+                        <td className="py-2 text-right">
+                          <button onClick={() => delRegistro(r.id)} className="text-xs text-red-600 hover:underline">eliminar</button>
+                        </td>
+                      </tr>
+                    );
+                  })}
                 </tbody>
               </table>
             </div>

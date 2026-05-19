@@ -3,34 +3,19 @@ import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { Card, H2, Label, Stat, btnCls, btnGhostCls, inputCls } from "@/components/ui";
 import { money, num, today } from "@/lib/format";
+import { totalesRegistros, vehiculosByPlaca, type Totales } from "@/lib/calc";
 import type { Vehiculo, Registro, Anticipo } from "@/lib/types";
 
 const SIN_PROP = "Sin propietario";
 const SIN_CONS = "Sin consorcio";
 
-type Agg = {
-  km: number;
-  gasto: number;
-  ingreso: number;
+type Group = {
+  nombre: string;
+  vehiculos: Vehiculo[];
+  placas: string[];
+  totales: Totales;
   anticipos: number;
-  neto: number;
 };
-
-function aggregate(
-  vehiculos: Vehiculo[],
-  registros: Registro[],
-  anticipos: Anticipo[]
-): Agg {
-  const tarifa = new Map(vehiculos.map((v) => [v.placa, v.precio_por_km]));
-  let km = 0, gasto = 0, ingreso = 0, ant = 0;
-  for (const r of registros) {
-    km += r.km_recorridos;
-    gasto += r.gasto_gasolina;
-    ingreso += r.km_recorridos * (tarifa.get(r.placa) ?? 0);
-  }
-  for (const a of anticipos) ant += a.monto;
-  return { km, gasto, ingreso, anticipos: ant, neto: ingreso - ant };
-}
 
 export default function HomePage() {
   const [vehiculos, setVehiculos] = useState<Vehiculo[]>([]);
@@ -43,7 +28,6 @@ export default function HomePage() {
     alias: "",
     volumen: "",
     consorcio: "",
-    precio: "",
   });
   const [err, setErr] = useState<string | null>(null);
 
@@ -73,7 +57,6 @@ export default function HomePage() {
         alias: form.alias,
         volumen_m3: form.volumen,
         consorcio_actual: form.consorcio,
-        precio_por_km: Number(form.precio || 0),
       }),
     });
     if (!res.ok) {
@@ -81,7 +64,7 @@ export default function HomePage() {
       setErr(j.error ?? "error");
       return;
     }
-    setForm({ placa: "", conductor: "", propietario: "", alias: "", volumen: "", consorcio: "", precio: "" });
+    setForm({ placa: "", conductor: "", propietario: "", alias: "", volumen: "", consorcio: "" });
     loadAll();
   }
 
@@ -91,7 +74,9 @@ export default function HomePage() {
     loadAll();
   }
 
-  const propietarios = useMemo(() => {
+  const vByPlaca = useMemo(() => vehiculosByPlaca(vehiculos), [vehiculos]);
+
+  const propietarios: Group[] = useMemo(() => {
     const groups = new Map<string, Vehiculo[]>();
     for (const v of vehiculos) {
       const key = v.propietario?.trim() || SIN_PROP;
@@ -100,16 +85,21 @@ export default function HomePage() {
       groups.set(key, list);
     }
     return [...groups.entries()].map(([nombre, vs]) => {
-      const placas = new Set(vs.map((v) => v.placa));
-      const rs = registros.filter((r) => placas.has(r.placa));
-      const as = anticipos.filter((a) => placas.has(a.placa));
-      return { nombre, vehiculos: vs, agg: aggregate(vs, rs, as) };
-    }).sort((a, b) => b.agg.neto - a.agg.neto);
-  }, [vehiculos, registros, anticipos]);
+      const placas = vs.map((v) => v.placa);
+      const setP = new Set(placas);
+      const rs = registros.filter((r) => setP.has(r.placa));
+      const as = anticipos.filter((a) => setP.has(a.placa));
+      return {
+        nombre,
+        vehiculos: vs,
+        placas,
+        totales: totalesRegistros(rs, vByPlaca),
+        anticipos: as.reduce((s, a) => s + a.monto, 0),
+      };
+    }).sort((a, b) => b.totales.facturado - a.totales.facturado);
+  }, [vehiculos, registros, anticipos, vByPlaca]);
 
-  // Consorcios: usa el consorcio "congelado" en cada registro/anticipo.
-  // Un consorcio puede aparecer aunque hoy ningún vehículo lo tenga como "actual".
-  const consorcios = useMemo(() => {
+  const consorcios: Group[] = useMemo(() => {
     const allNames = new Set<string>();
     for (const r of registros) allNames.add(r.consorcio?.trim() || SIN_CONS);
     for (const a of anticipos) allNames.add(a.consorcio?.trim() || SIN_CONS);
@@ -123,14 +113,18 @@ export default function HomePage() {
       if (nombre !== SIN_CONS) {
         for (const v of vehiculos) if (v.consorcio_actual?.trim() === nombre) placas.add(v.placa);
       }
-      return { nombre, placas: [...placas], agg: aggregate(vehiculos, rs, as) };
-    }).sort((a, b) => b.agg.neto - a.agg.neto);
-  }, [vehiculos, registros, anticipos]);
+      return {
+        nombre,
+        vehiculos: vehiculos.filter((v) => placas.has(v.placa)),
+        placas: [...placas],
+        totales: totalesRegistros(rs, vByPlaca),
+        anticipos: as.reduce((s, a) => s + a.monto, 0),
+      };
+    }).sort((a, b) => b.totales.facturado - a.totales.facturado);
+  }, [vehiculos, registros, anticipos, vByPlaca]);
 
-  const totals = useMemo(
-    () => aggregate(vehiculos, registros, anticipos),
-    [vehiculos, registros, anticipos]
-  );
+  const totals = useMemo(() => totalesRegistros(registros, vByPlaca), [registros, vByPlaca]);
+  const totalAnticipos = useMemo(() => anticipos.reduce((s, a) => s + a.monto, 0), [anticipos]);
 
   const propietariosKnown = useMemo(
     () => Array.from(new Set(vehiculos.map((v) => v.propietario).filter(Boolean) as string[])),
@@ -151,11 +145,12 @@ export default function HomePage() {
         <p className="text-sm text-zinc-500 mt-1">Hoy: {today()}</p>
       </section>
 
-      <section className="grid grid-cols-2 md:grid-cols-4 gap-3">
+      <section className="grid grid-cols-2 md:grid-cols-5 gap-3">
         <Stat label="Km totales" value={num(totals.km)} />
-        <Stat label="Ingreso bruto" value={money(totals.ingreso)} hint="km × precio/km" />
-        <Stat label="Anticipos pagados" value={money(totals.anticipos)} />
-        <Stat label="Gasto gasolina" value={money(totals.gasto)} />
+        <Stat label="Facturado" value={money(totals.facturado)} hint="m³ × km × tarifa" />
+        <Stat label="Cobrado (conductor)" value={money(totals.cobrado)} />
+        <Stat label="Margen" value={money(totals.margen)} hint="fact − cobr − gas" />
+        <Stat label="Anticipos recibidos" value={money(totalAnticipos)} />
       </section>
 
       <section>
@@ -164,31 +159,13 @@ export default function HomePage() {
           <p className="text-sm text-zinc-500">Aún no hay propietarios. Agregá un vehículo abajo.</p>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-            {propietarios.map((p) => {
-              const real = p.nombre !== SIN_PROP;
-              const inner = (
-                <div className={`rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-4 ${real ? "transition-colors group-hover:border-zinc-400 dark:group-hover:border-zinc-500 cursor-pointer" : "opacity-75"}`}>
-                  <div className="flex items-baseline justify-between gap-2">
-                    <h3 className="font-semibold tracking-tight">{p.nombre}</h3>
-                    <span className="text-xs text-zinc-500">{p.vehiculos.length} placa{p.vehiculos.length !== 1 ? "s" : ""}</span>
-                  </div>
-                  <div className="mt-1 text-xs text-zinc-500 truncate">
-                    {p.vehiculos.map((v) => v.placa).join(" · ")}
-                  </div>
-                  <div className="mt-3 grid grid-cols-2 gap-2 text-sm">
-                    <Mini label="Km" value={num(p.agg.km)} />
-                    <Mini label="Ingreso" value={money(p.agg.ingreso)} />
-                    <Mini label="Anticipos" value={money(p.agg.anticipos)} />
-                    <Mini label="Neto" value={money(p.agg.neto)} className={p.agg.neto >= 0 ? "" : "text-red-600"} />
-                  </div>
-                </div>
-              );
-              return real ? (
-                <Link key={p.nombre} href={`/propietario/${encodeURIComponent(p.nombre)}`} className="block group">{inner}</Link>
-              ) : (
-                <div key={p.nombre}>{inner}</div>
-              );
-            })}
+            {propietarios.map((p) => (
+              <GroupCard
+                key={p.nombre}
+                group={p}
+                href={p.nombre !== SIN_PROP ? `/propietario/${encodeURIComponent(p.nombre)}` : null}
+              />
+            ))}
           </div>
         )}
       </section>
@@ -196,32 +173,16 @@ export default function HomePage() {
       <section>
         <H2>Consorcios</H2>
         {consorcios.length === 0 ? (
-          <p className="text-sm text-zinc-500">Sin consorcios todavía. Se crean al cargar registros o anticipos.</p>
+          <p className="text-sm text-zinc-500">Sin consorcios todavía. Se crean al asignarlos a vehículos o al cargar registros.</p>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-            {consorcios.map((c) => {
-              const real = c.nombre !== SIN_CONS;
-              const inner = (
-                <div className={`rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-4 ${real ? "transition-colors group-hover:border-zinc-400 dark:group-hover:border-zinc-500 cursor-pointer" : "opacity-75"}`}>
-                  <div className="flex items-baseline justify-between gap-2">
-                    <h3 className="font-semibold tracking-tight">{c.nombre}</h3>
-                    <span className="text-xs text-zinc-500">{c.placas.length} placa{c.placas.length !== 1 ? "s" : ""}</span>
-                  </div>
-                  <div className="mt-1 text-xs text-zinc-500 truncate">{c.placas.join(" · ") || "—"}</div>
-                  <div className="mt-3 grid grid-cols-2 gap-2 text-sm">
-                    <Mini label="Km" value={num(c.agg.km)} />
-                    <Mini label="Ingreso" value={money(c.agg.ingreso)} />
-                    <Mini label="Anticipos" value={money(c.agg.anticipos)} />
-                    <Mini label="Neto" value={money(c.agg.neto)} className={c.agg.neto >= 0 ? "" : "text-red-600"} />
-                  </div>
-                </div>
-              );
-              return real ? (
-                <Link key={c.nombre} href={`/consorcio/${encodeURIComponent(c.nombre)}`} className="block group">{inner}</Link>
-              ) : (
-                <div key={c.nombre}>{inner}</div>
-              );
-            })}
+            {consorcios.map((c) => (
+              <GroupCard
+                key={c.nombre}
+                group={c}
+                href={c.nombre !== SIN_CONS ? `/consorcio/${encodeURIComponent(c.nombre)}` : null}
+              />
+            ))}
           </div>
         )}
       </section>
@@ -260,17 +221,14 @@ export default function HomePage() {
                 </datalist>
               </div>
             </div>
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <Label>Alias</Label>
-                <input className={inputCls} value={form.alias} onChange={(e) => setForm({ ...form, alias: e.target.value })} placeholder="Camioneta blanca" />
-              </div>
-              <div>
-                <Label>Precio por km</Label>
-                <input className={inputCls} type="number" step="0.01" value={form.precio} onChange={(e) => setForm({ ...form, precio: e.target.value })} placeholder="1500" />
-              </div>
+            <div>
+              <Label>Alias</Label>
+              <input className={inputCls} value={form.alias} onChange={(e) => setForm({ ...form, alias: e.target.value })} placeholder="Camioneta blanca" />
             </div>
             {err ? <div className="text-sm text-red-600">{err}</div> : null}
+            <p className="text-xs text-zinc-500">
+              La tarifa ahora se define por <strong>ruta</strong> dentro de cada consorcio. Tras crear el vehículo, andá a su consorcio y definí rutas con sus precios.
+            </p>
             <button type="submit" className={btnCls}>Guardar</button>
           </form>
         </Card>
@@ -293,7 +251,6 @@ export default function HomePage() {
                       {v.propietario ? <>prop: <span className="text-zinc-700 dark:text-zinc-300">{v.propietario}</span></> : "sin propietario"}
                       {v.conductor ? <> · cond: <span className="text-zinc-700 dark:text-zinc-300">{v.conductor}</span></> : null}
                       {v.consorcio_actual ? <> · cons: <span className="text-zinc-700 dark:text-zinc-300">{v.consorcio_actual}</span></> : null}
-                      {" · "}{money(v.precio_por_km)}/km
                     </div>
                   </div>
                   <div className="flex gap-2 shrink-0">
@@ -309,6 +266,26 @@ export default function HomePage() {
       </section>
     </div>
   );
+}
+
+function GroupCard({ group, href }: { group: Group; href: string | null }) {
+  const porCobrar = group.totales.facturado - group.anticipos;
+  const inner = (
+    <div className={`rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-4 ${href ? "transition-colors group-hover:border-zinc-400 dark:group-hover:border-zinc-500 cursor-pointer" : "opacity-75"}`}>
+      <div className="flex items-baseline justify-between gap-2">
+        <h3 className="font-semibold tracking-tight">{group.nombre}</h3>
+        <span className="text-xs text-zinc-500">{group.placas.length} placa{group.placas.length !== 1 ? "s" : ""}</span>
+      </div>
+      <div className="mt-1 text-xs text-zinc-500 truncate">{group.placas.join(" · ") || "—"}</div>
+      <div className="mt-3 grid grid-cols-2 gap-2 text-sm">
+        <Mini label="Km" value={num(group.totales.km)} />
+        <Mini label="Facturado" value={money(group.totales.facturado)} />
+        <Mini label="Anticipos" value={money(group.anticipos)} />
+        <Mini label="Por cobrar" value={money(porCobrar)} className={porCobrar >= 0 ? "" : "text-red-600"} />
+      </div>
+    </div>
+  );
+  return href ? <Link href={href} className="block group">{inner}</Link> : <div>{inner}</div>;
 }
 
 function Mini({ label, value, className = "" }: { label: string; value: React.ReactNode; className?: string }) {

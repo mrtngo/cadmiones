@@ -13,19 +13,41 @@ CREATE TABLE IF NOT EXISTS vehiculos (
 );
 CREATE INDEX IF NOT EXISTS idx_vehiculos_propietario ON vehiculos(propietario);
 
+-- Una "ruta" es un servicio dentro de un consorcio (e.g. "Cantera → Obra")
+-- con su precio facturado (ingreso) y cobrado (pago al conductor), ambos
+-- por m³·km. El total del viaje = volumen_m3 (del vehículo) × km × precio.
+CREATE TABLE IF NOT EXISTS rutas (
+  id                       BIGSERIAL PRIMARY KEY,
+  consorcio                TEXT NOT NULL,
+  nombre                   TEXT NOT NULL,
+  precio_facturado_m3km    DOUBLE PRECISION NOT NULL DEFAULT 0,
+  precio_cobrado_m3km      DOUBLE PRECISION NOT NULL DEFAULT 0,
+  created_at               TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  UNIQUE (consorcio, nombre)
+);
+CREATE INDEX IF NOT EXISTS idx_rutas_consorcio ON rutas(consorcio);
+
+-- Un registro = un viaje (un camión puede tener varios por día).
+-- ruta_id es FK pero los precios se snapshotean por si la ruta cambia
+-- de tarifa o se borra.
 CREATE TABLE IF NOT EXISTS registros (
-  id               BIGSERIAL PRIMARY KEY,
-  fecha            TEXT NOT NULL,
-  placa            TEXT NOT NULL REFERENCES vehiculos(placa) ON DELETE CASCADE,
-  consorcio        TEXT,
-  km_recorridos    DOUBLE PRECISION NOT NULL DEFAULT 0,
-  gasto_gasolina   DOUBLE PRECISION NOT NULL DEFAULT 0,
-  precio_gasolina  DOUBLE PRECISION,
-  notas            TEXT,
-  created_at       TIMESTAMPTZ NOT NULL DEFAULT NOW()
+  id                       BIGSERIAL PRIMARY KEY,
+  fecha                    TEXT NOT NULL,
+  placa                    TEXT NOT NULL REFERENCES vehiculos(placa) ON DELETE CASCADE,
+  consorcio                TEXT,
+  ruta_id                  BIGINT REFERENCES rutas(id) ON DELETE SET NULL,
+  ruta_nombre              TEXT,
+  precio_facturado_m3km    DOUBLE PRECISION,
+  precio_cobrado_m3km      DOUBLE PRECISION,
+  km_recorridos            DOUBLE PRECISION NOT NULL DEFAULT 0,
+  gasto_gasolina           DOUBLE PRECISION NOT NULL DEFAULT 0,
+  precio_gasolina          DOUBLE PRECISION,
+  notas                    TEXT,
+  created_at               TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 CREATE INDEX IF NOT EXISTS idx_registros_placa_fecha ON registros(placa, fecha);
 CREATE INDEX IF NOT EXISTS idx_registros_consorcio ON registros(consorcio);
+CREATE INDEX IF NOT EXISTS idx_registros_ruta ON registros(ruta_id);
 
 CREATE TABLE IF NOT EXISTS anticipos (
   id               BIGSERIAL PRIMARY KEY,
