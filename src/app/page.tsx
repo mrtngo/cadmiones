@@ -1,65 +1,146 @@
-import Image from "next/image";
+"use client";
+import { useEffect, useState } from "react";
+import Link from "next/link";
+import { Card, H2, Label, Stat, btnCls, btnGhostCls, inputCls } from "@/components/ui";
+import { money, num, today } from "@/lib/format";
+import type { Vehiculo, Registro, Anticipo } from "@/lib/types";
 
-export default function Home() {
+type Resumen = {
+  placa: string;
+  alias: string | null;
+  precio_por_km: number;
+  km: number;
+  gasto: number;
+  ingreso: number;
+  anticipos: number;
+  neto: number;
+};
+
+export default function HomePage() {
+  const [vehiculos, setVehiculos] = useState<Vehiculo[]>([]);
+  const [registros, setRegistros] = useState<Registro[]>([]);
+  const [anticipos, setAnticipos] = useState<Anticipo[]>([]);
+  const [placa, setPlaca] = useState("");
+  const [alias, setAlias] = useState("");
+  const [precio, setPrecio] = useState("");
+  const [err, setErr] = useState<string | null>(null);
+
+  async function loadAll() {
+    const [vs, rs, as] = await Promise.all([
+      fetch("/api/vehiculos").then((r) => r.json()),
+      fetch("/api/registros").then((r) => r.json()),
+      fetch("/api/anticipos").then((r) => r.json()),
+    ]);
+    setVehiculos(vs);
+    setRegistros(rs);
+    setAnticipos(as);
+  }
+
+  useEffect(() => { loadAll(); }, []);
+
+  async function addVehiculo(e: React.FormEvent) {
+    e.preventDefault();
+    setErr(null);
+    const res = await fetch("/api/vehiculos", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ placa, alias, precio_por_km: Number(precio || 0) }),
+    });
+    if (!res.ok) {
+      const j = await res.json().catch(() => ({}));
+      setErr(j.error ?? "error");
+      return;
+    }
+    setPlaca(""); setAlias(""); setPrecio("");
+    loadAll();
+  }
+
+  async function delVehiculo(p: string) {
+    if (!confirm(`Eliminar ${p} y todos sus registros/anticipos?`)) return;
+    await fetch(`/api/vehiculos/${encodeURIComponent(p)}`, { method: "DELETE" });
+    loadAll();
+  }
+
+  const resumen: Resumen[] = vehiculos.map((v) => {
+    const rs = registros.filter((r) => r.placa === v.placa);
+    const as = anticipos.filter((a) => a.placa === v.placa);
+    const km = rs.reduce((s, r) => s + r.km_recorridos, 0);
+    const gasto = rs.reduce((s, r) => s + r.gasto_gasolina, 0);
+    const ingreso = km * v.precio_por_km;
+    const ant = as.reduce((s, a) => s + a.monto, 0);
+    return {
+      placa: v.placa,
+      alias: v.alias,
+      precio_por_km: v.precio_por_km,
+      km, gasto, ingreso,
+      anticipos: ant,
+      neto: ingreso - ant,
+    };
+  });
+
+  const totalKm = resumen.reduce((s, r) => s + r.km, 0);
+  const totalIngreso = resumen.reduce((s, r) => s + r.ingreso, 0);
+  const totalAnticipos = resumen.reduce((s, r) => s + r.anticipos, 0);
+  const totalGasto = resumen.reduce((s, r) => s + r.gasto, 0);
+
   return (
-    <div className="flex flex-col flex-1 items-center justify-center bg-zinc-50 font-sans dark:bg-black">
-      <main className="flex flex-1 w-full max-w-3xl flex-col items-center justify-between py-32 px-16 bg-white dark:bg-black sm:items-start">
-        <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={100}
-          height={20}
-          priority
-        />
-        <div className="flex flex-col items-center gap-6 text-center sm:items-start sm:text-left">
-          <h1 className="max-w-xs text-3xl font-semibold leading-10 tracking-tight text-black dark:text-zinc-50">
-            To get started, edit the page.tsx file.
-          </h1>
-          <p className="max-w-md text-lg leading-8 text-zinc-600 dark:text-zinc-400">
-            Looking for a starting point or more instructions? Head over to{" "}
-            <a
-              href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Templates
-            </a>{" "}
-            or the{" "}
-            <a
-              href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Learning
-            </a>{" "}
-            center.
-          </p>
-        </div>
-        <div className="flex flex-col gap-4 text-base font-medium sm:flex-row">
-          <a
-            className="flex h-12 w-full items-center justify-center gap-2 rounded-full bg-foreground px-5 text-background transition-colors hover:bg-[#383838] dark:hover:bg-[#ccc] md:w-[158px]"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={16}
-              height={16}
-            />
-            Deploy Now
-          </a>
-          <a
-            className="flex h-12 w-full items-center justify-center rounded-full border border-solid border-black/[.08] px-5 transition-colors hover:border-transparent hover:bg-black/[.04] dark:border-white/[.145] dark:hover:bg-[#1a1a1a] md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Documentation
-          </a>
-        </div>
-      </main>
+    <div className="space-y-6">
+      <section>
+        <h1 className="text-2xl font-bold tracking-tight">Tablero general</h1>
+        <p className="text-sm text-zinc-500 mt-1">Resumen acumulado por placa. Hoy: {today()}</p>
+      </section>
+
+      <section className="grid grid-cols-2 md:grid-cols-4 gap-3">
+        <Stat label="Km totales" value={num(totalKm)} />
+        <Stat label="Ingreso bruto" value={money(totalIngreso)} hint="km × precio/km" />
+        <Stat label="Anticipos pagados" value={money(totalAnticipos)} />
+        <Stat label="Gasto gasolina" value={money(totalGasto)} />
+      </section>
+
+      <section className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <Card>
+          <H2>Agregar vehículo</H2>
+          <form onSubmit={addVehiculo} className="space-y-3">
+            <div>
+              <Label>Placa</Label>
+              <input className={inputCls} value={placa} onChange={(e) => setPlaca(e.target.value)} placeholder="ABC123" required />
+            </div>
+            <div>
+              <Label>Alias (opcional)</Label>
+              <input className={inputCls} value={alias} onChange={(e) => setAlias(e.target.value)} placeholder="Camioneta blanca" />
+            </div>
+            <div>
+              <Label>Precio por km</Label>
+              <input className={inputCls} type="number" step="0.01" value={precio} onChange={(e) => setPrecio(e.target.value)} placeholder="1500" />
+            </div>
+            {err ? <div className="text-sm text-red-600">{err}</div> : null}
+            <button type="submit" className={btnCls}>Guardar</button>
+          </form>
+        </Card>
+
+        <Card>
+          <H2>Vehículos</H2>
+          {vehiculos.length === 0 ? (
+            <p className="text-sm text-zinc-500">Aún no hay vehículos. Agrega uno para empezar.</p>
+          ) : (
+            <ul className="divide-y divide-zinc-200 dark:divide-zinc-800">
+              {resumen.map((r) => (
+                <li key={r.placa} className="py-3 flex items-center justify-between gap-3">
+                  <div>
+                    <div className="font-semibold">{r.placa}{r.alias ? <span className="text-zinc-500 font-normal"> · {r.alias}</span> : null}</div>
+                    <div className="text-xs text-zinc-500">{money(r.precio_por_km)} / km · {num(r.km)} km · neto {money(r.neto)}</div>
+                  </div>
+                  <div className="flex gap-2">
+                    <Link href={`/conductor?placa=${r.placa}`} className={btnGhostCls}>Conductor</Link>
+                    <Link href={`/cliente?placa=${r.placa}`} className={btnGhostCls}>Cliente</Link>
+                    <button onClick={() => delVehiculo(r.placa)} className="text-xs text-red-600 hover:underline">eliminar</button>
+                  </div>
+                </li>
+              ))}
+            </ul>
+          )}
+        </Card>
+      </section>
     </div>
   );
 }

@@ -1,36 +1,39 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# cadmiones
 
-## Getting Started
+Control de vehículos con dos vistas: **conductor** (km y gasto de gasolina por día) y **cliente** (km × tarifa = ingreso, menos anticipos = neto a cobrar). Datos separados por **fecha** y **placa**.
 
-First, run the development server:
+## Stack
 
-```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
-```
+- Next.js 16 (App Router) + TypeScript + Tailwind v4
+- Supabase Postgres vía [`postgres`](https://github.com/porsager/postgres)
+- Deploy: Vercel
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+## Páginas
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+- `/` — alta de vehículos y tablero global por placa.
+- `/conductor` — registrar kms y gasto del día, filtros por placa y rango de fechas.
+- `/cliente` — registrar anticipos, ver facturable por día y neto a cobrar.
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+## Setup local
 
-## Learn More
+1. Clonar el repo e instalar deps:
+   ```bash
+   npm install
+   ```
+2. Copiar `.env.example` → `.env.local` y pegar tu `DATABASE_URL` de Supabase (Transaction Pooler, puerto 6543).
+3. Si la base está vacía, aplicar el schema una sola vez desde el SQL Editor de Supabase:
+   ```bash
+   cat supabase/schema.sql
+   ```
+4. Levantar:
+   ```bash
+   npm run dev
+   ```
 
-To learn more about Next.js, take a look at the following resources:
+Requiere Node ≥ 20.9.
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+## Deploy en Vercel
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+1. Importar este repo en [vercel.com/new](https://vercel.com/new).
+2. En **Settings → Environment Variables**, agregar `DATABASE_URL` con la connection string del Transaction Pooler de Supabase.
+3. Deploy. Listo.
