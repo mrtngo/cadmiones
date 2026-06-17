@@ -71,6 +71,15 @@ CREATE TABLE IF NOT EXISTS combustibles (
 CREATE INDEX IF NOT EXISTS idx_combustibles_placa_fecha ON combustibles(placa, fecha);
 ALTER TABLE combustibles ADD COLUMN IF NOT EXISTS image_url TEXT;
 
+CREATE TABLE IF NOT EXISTS uploaded_images (
+  id             BIGSERIAL PRIMARY KEY,
+  filename       TEXT NOT NULL,
+  content_type   TEXT NOT NULL,
+  size_bytes     INTEGER NOT NULL,
+  data           BYTEA NOT NULL,
+  created_at     TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
 CREATE TABLE IF NOT EXISTS anticipos (
   id               BIGSERIAL PRIMARY KEY,
   fecha            TEXT NOT NULL,

@@ -1,17 +1,30 @@
 export const MAX_IMAGE_BYTES = 2 * 1024 * 1024;
 
-export function readImageAsDataUrl(file: File): Promise<string> {
+export function validateImageFile(file: File) {
   if (!file.type.startsWith("image/")) {
-    return Promise.reject(new Error("Selecciona una imagen"));
+    throw new Error("Selecciona una imagen");
   }
   if (file.size > MAX_IMAGE_BYTES) {
-    return Promise.reject(new Error("La imagen debe pesar máximo 2 MB"));
+    throw new Error("La imagen debe pesar máximo 2 MB");
+  }
+}
+
+export async function uploadImageFile(file: File): Promise<string> {
+  validateImageFile(file);
+
+  const formData = new FormData();
+  formData.set("file", file);
+
+  const res = await fetch("/api/uploads", {
+    method: "POST",
+    body: formData,
+  });
+
+  if (!res.ok) {
+    const body = await res.json().catch(() => null);
+    throw new Error(body?.error ?? "No se pudo subir la imagen");
   }
 
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = () => resolve(String(reader.result));
-    reader.onerror = () => reject(new Error("No se pudo leer la imagen"));
-    reader.readAsDataURL(file);
-  });
+  const body = await res.json();
+  return String(body.url);
 }
