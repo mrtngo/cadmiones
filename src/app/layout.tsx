@@ -3,6 +3,7 @@ import { Geist, Geist_Mono } from "next/font/google";
 import Link from "next/link";
 import { TruckLogo } from "@/components/TruckLogo";
 import { ThemeToggle } from "@/components/ThemeToggle";
+import { LogoutButton } from "@/components/LogoutButton";
 import "./globals.css";
 
 const geistSans = Geist({ variable: "--font-geist-sans", subsets: ["latin"] });
@@ -45,7 +46,10 @@ try {
               <Link href="/obra" className="hover:underline">Obra</Link>
               <Link href="/combustible" className="hover:underline">Combustible</Link>
             </div>
-            <ThemeToggle />
+            <div className="ml-auto flex items-center gap-2">
+              <ThemeToggle />
+              <LogoutButton />
+            </div>
           </nav>
         </header>
         <main className="flex-1 max-w-6xl w-full mx-auto px-4 sm:px-6 py-6">{children}</main>
