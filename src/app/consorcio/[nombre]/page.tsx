@@ -290,7 +290,7 @@ export default function ConsorcioPage({
                     <td className="py-2 pr-3 text-right">{money(p.anticipos)}</td>
                     <td className={`py-2 pr-3 text-right font-semibold ${p.porCobrar >= 0 ? "" : "text-red-600"}`}>{money(p.porCobrar)}</td>
                     <td className="py-2 text-right">
-                      <Link href={`/cliente?placa=${p.placa}&consorcio=${encodeURIComponent(nombre)}`} className={btnGhostCls}>Detalle</Link>
+                      <Link href={`/obra/${encodeURIComponent(nombre)}?placa=${p.placa}`} className={btnGhostCls}>Detalle</Link>
                     </td>
                   </tr>
                 ))}

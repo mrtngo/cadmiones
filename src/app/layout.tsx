@@ -8,7 +8,7 @@ const geistMono = Geist_Mono({ variable: "--font-geist-mono", subsets: ["latin"]
 
 export const metadata: Metadata = {
   title: "Cadmiones",
-  description: "Control de vehículos: conductor y cliente",
+  description: "Control de vehículos, propietarios y obras",
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
@@ -20,8 +20,8 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
             <Link href="/" className="font-bold tracking-tight text-lg">cadmiones</Link>
             <div className="flex gap-4 text-sm">
               <Link href="/" className="hover:underline">Inicio</Link>
-              <Link href="/conductor" className="hover:underline">Conductor</Link>
-              <Link href="/cliente" className="hover:underline">Cliente</Link>
+              <Link href="/conductor" className="hover:underline">Propietario</Link>
+              <Link href="/obra" className="hover:underline">Obra</Link>
               <Link href="/combustible" className="hover:underline">Combustible</Link>
             </div>
           </nav>

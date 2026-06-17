@@ -30,6 +30,11 @@ CREATE TABLE IF NOT EXISTS rutas (
 );
 CREATE INDEX IF NOT EXISTS idx_rutas_consorcio ON rutas(consorcio);
 
+CREATE TABLE IF NOT EXISTS obras (
+  nombre      TEXT PRIMARY KEY,
+  created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
 -- Un registro = un viaje (un camión puede tener varios por día).
 -- ruta_id es FK pero los precios se snapshotean por si la ruta cambia
 -- de tarifa o se borra.

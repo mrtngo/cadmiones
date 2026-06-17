@@ -7,10 +7,10 @@ import { money, num, today } from "@/lib/format";
 import { cobradoDeRegistro, facturadoDeRegistro, totalesRegistros, vehiculosByPlaca } from "@/lib/calc";
 import type { Vehiculo, Registro, Anticipo } from "@/lib/types";
 
-function ClienteInner() {
+export function ClienteInner({ fixedConsorcio }: { fixedConsorcio?: string }) {
   const search = useSearchParams();
   const initialPlaca = (search.get("placa") ?? "").toUpperCase();
-  const initialConsorcio = search.get("consorcio") ?? "";
+  const initialConsorcio = fixedConsorcio ?? search.get("consorcio") ?? "";
 
   const [vehiculos, setVehiculos] = useState<Vehiculo[]>([]);
   const [registros, setRegistros] = useState<Registro[]>([]);
@@ -19,6 +19,7 @@ function ClienteInner() {
   const [consorcio, setConsorcio] = useState(initialConsorcio);
   const [desde, setDesde] = useState("");
   const [hasta, setHasta] = useState("");
+  const activeConsorcio = fixedConsorcio ?? consorcio;
 
   const [form, setForm] = useState({
     fecha: today(),
@@ -35,7 +36,7 @@ function ClienteInner() {
       setForm((f) => ({
         ...f,
         placa: vs[0].placa,
-        consorcio: f.consorcio || vs[0].consorcio_actual || "",
+        consorcio: fixedConsorcio ?? (f.consorcio || vs[0].consorcio_actual || ""),
       }));
     }
   }
@@ -43,7 +44,7 @@ function ClienteInner() {
   async function loadData() {
     const qs = new URLSearchParams();
     if (placa) qs.set("placa", placa);
-    if (consorcio) qs.set("consorcio", consorcio);
+    if (activeConsorcio) qs.set("consorcio", activeConsorcio);
     if (desde) qs.set("desde", desde);
     if (hasta) qs.set("hasta", hasta);
     const [rs, as] = await Promise.all([
@@ -55,11 +56,11 @@ function ClienteInner() {
   }
 
   useEffect(() => { loadVehiculos(); }, []);
-  useEffect(() => { loadData(); }, [placa, consorcio, desde, hasta]);
+  useEffect(() => { loadData(); }, [placa, activeConsorcio, desde, hasta]);
 
   function pickPlaca(p: string) {
     const v = vehiculos.find((x) => x.placa === p);
-    setForm((f) => ({ ...f, placa: p, consorcio: v?.consorcio_actual ?? f.consorcio }));
+    setForm((f) => ({ ...f, placa: p, consorcio: fixedConsorcio ?? v?.consorcio_actual ?? f.consorcio }));
   }
 
   async function addAnticipo(e: React.FormEvent) {
@@ -70,7 +71,7 @@ function ClienteInner() {
       body: JSON.stringify({
         fecha: form.fecha,
         placa: form.placa,
-        consorcio: form.consorcio || null,
+        consorcio: activeConsorcio || form.consorcio || null,
         monto: Number(form.monto || 0),
         notas: form.notas || null,
       }),
@@ -129,7 +130,7 @@ function ClienteInner() {
   return (
     <div className="space-y-6">
       <section>
-        <h1 className="text-2xl font-bold tracking-tight">Vista cliente</h1>
+        <h1 className="text-2xl font-bold tracking-tight">{fixedConsorcio ? fixedConsorcio : "Vista obra"}</h1>
         <p className="text-sm text-zinc-500 mt-1">Facturado al consorcio menos anticipos = por cobrar. Cobrado = lo que pagás al conductor.</p>
       </section>
 
@@ -141,11 +142,19 @@ function ClienteInner() {
             <VehiculoSelector value={placa} vehiculos={vehiculos} onChange={setPlaca} />
           </div>
           <div>
-            <Label>Consorcio</Label>
-            <input className={inputCls} value={consorcio} onChange={(e) => setConsorcio(e.target.value)} placeholder="Todos" list="cliente-cons-list" />
-            <datalist id="cliente-cons-list">
-              {consorciosKnown.map((c) => <option key={c} value={c} />)}
-            </datalist>
+            <Label>Obra</Label>
+            {fixedConsorcio ? (
+              <div className="rounded-md border border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-950 px-3 py-2 text-sm font-medium">
+                {fixedConsorcio}
+              </div>
+            ) : (
+              <>
+                <input className={inputCls} value={consorcio} onChange={(e) => setConsorcio(e.target.value)} placeholder="Todas" list="cliente-cons-list" />
+                <datalist id="cliente-cons-list">
+                  {consorciosKnown.map((c) => <option key={c} value={c} />)}
+                </datalist>
+              </>
+            )}
           </div>
           <div>
             <Label>Desde</Label>
@@ -179,11 +188,19 @@ function ClienteInner() {
               <VehiculoSelector value={form.placa} vehiculos={vehiculos} onChange={pickPlaca} allowAll={false} />
             </div>
             <div>
-              <Label>Consorcio</Label>
-              <input className={inputCls} value={form.consorcio} onChange={(e) => setForm({ ...form, consorcio: e.target.value })} placeholder="Constructora X" list="cliente-form-cons" />
-              <datalist id="cliente-form-cons">
-                {consorciosKnown.map((c) => <option key={c} value={c} />)}
-              </datalist>
+              <Label>Obra</Label>
+              {fixedConsorcio ? (
+                <div className="rounded-md border border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-950 px-3 py-2 text-sm font-medium">
+                  {fixedConsorcio}
+                </div>
+              ) : (
+                <>
+                  <input className={inputCls} value={form.consorcio} onChange={(e) => setForm({ ...form, consorcio: e.target.value })} placeholder="Constructora X" list="cliente-form-cons" />
+                  <datalist id="cliente-form-cons">
+                    {consorciosKnown.map((c) => <option key={c} value={c} />)}
+                  </datalist>
+                </>
+              )}
             </div>
             <div>
               <Label>Monto</Label>
@@ -245,7 +262,7 @@ function ClienteInner() {
                   <tr>
                     <th className="py-2 pr-3">Fecha</th>
                     <th className="py-2 pr-3">Placa</th>
-                    <th className="py-2 pr-3">Consorcio</th>
+                    <th className="py-2 pr-3">Obra</th>
                     <th className="py-2 pr-3 text-right">Monto</th>
                     <th className="py-2 pr-3">Notas</th>
                     <th className="py-2"></th>

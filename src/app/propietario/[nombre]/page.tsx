@@ -129,7 +129,12 @@ export default function PropietarioPage({
                     <td className="py-2 pr-3 text-right">{money(p.anticipos)}</td>
                     <td className={`py-2 pr-3 text-right font-semibold ${p.porCobrar >= 0 ? "" : "text-red-600"}`}>{money(p.porCobrar)}</td>
                     <td className="py-2 text-right">
-                      <Link href={`/cliente?placa=${p.v.placa}`} className={btnGhostCls}>Cliente</Link>
+                      <Link
+                        href={p.v.consorcio_actual ? `/obra/${encodeURIComponent(p.v.consorcio_actual)}?placa=${p.v.placa}` : `/obra?placa=${p.v.placa}`}
+                        className={btnGhostCls}
+                      >
+                        Obra
+                      </Link>
                     </td>
                   </tr>
                 ))}

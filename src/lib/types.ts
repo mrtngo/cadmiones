@@ -19,6 +19,11 @@ export type Ruta = {
   created_at: string;
 };
 
+export type Obra = {
+  nombre: string;
+  created_at: string;
+};
+
 export type Registro = {
   id: number;
   fecha: string;

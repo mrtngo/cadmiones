@@ -344,8 +344,13 @@ export default function HomePage() {
                   </div>
                   <div className="flex gap-2 shrink-0">
                     <button onClick={() => startEdit(v)} className={btnGhostCls}>Editar</button>
-                    <Link href={`/conductor?placa=${v.placa}`} className={btnGhostCls}>Conductor</Link>
-                    <Link href={`/cliente?placa=${v.placa}`} className={btnGhostCls}>Cliente</Link>
+                    <Link href={`/conductor?placa=${v.placa}`} className={btnGhostCls}>Propietario</Link>
+                    <Link
+                      href={v.consorcio_actual ? `/obra/${encodeURIComponent(v.consorcio_actual)}?placa=${v.placa}` : "/obra"}
+                      className={btnGhostCls}
+                    >
+                      Obra
+                    </Link>
                     <button onClick={() => delVehiculo(v.placa)} className="text-xs text-red-600 hover:underline">eliminar</button>
                   </div>
                 </li>
