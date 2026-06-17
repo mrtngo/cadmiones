@@ -4,7 +4,7 @@ import Link from "next/link";
 import { Card, H2, Label, Stat, btnCls, btnGhostCls, inputCls } from "@/components/ui";
 import { money, num, today } from "@/lib/format";
 import { totalesRegistros, vehiculosByPlaca, type Totales } from "@/lib/calc";
-import type { Vehiculo, Registro, Anticipo, Combustible } from "@/lib/types";
+import type { Vehiculo, Registro, Anticipo, Combustible, Obra } from "@/lib/types";
 
 const SIN_PROP = "Sin propietario";
 const SIN_CONS = "Sin consorcio";
@@ -22,6 +22,7 @@ export default function HomePage() {
   const [registros, setRegistros] = useState<Registro[]>([]);
   const [anticipos, setAnticipos] = useState<Anticipo[]>([]);
   const [combustibles, setCombustibles] = useState<Combustible[]>([]);
+  const [obras, setObras] = useState<Obra[]>([]);
   const [form, setForm] = useState({
     placa: "",
     conductor: "",
@@ -78,16 +79,18 @@ export default function HomePage() {
   }
 
   async function loadAll() {
-    const [vs, rs, as, cs] = await Promise.all([
+    const [vs, rs, as, cs, os] = await Promise.all([
       fetch("/api/vehiculos").then((r) => r.json()),
       fetch("/api/registros").then((r) => r.json()),
       fetch("/api/anticipos").then((r) => r.json()),
       fetch("/api/combustibles").then((r) => r.json()),
+      fetch("/api/obras").then((r) => r.json()),
     ]);
     setVehiculos(vs);
     setRegistros(rs);
     setAnticipos(as);
     setCombustibles(cs);
+    setObras(os);
   }
 
   useEffect(() => { loadAll(); }, []);
@@ -183,13 +186,7 @@ export default function HomePage() {
     () => Array.from(new Set(vehiculos.map((v) => v.propietario).filter(Boolean) as string[])),
     [vehiculos]
   );
-  const consorciosKnown = useMemo(() => {
-    const s = new Set<string>();
-    for (const v of vehiculos) if (v.consorcio_actual) s.add(v.consorcio_actual);
-    for (const r of registros) if (r.consorcio) s.add(r.consorcio);
-    for (const a of anticipos) if (a.consorcio) s.add(a.consorcio);
-    return [...s];
-  }, [vehiculos, registros, anticipos]);
+  const obrasKnown = useMemo(() => obras.map((o) => o.nombre), [obras]);
 
   return (
     <div className="space-y-6">
@@ -268,10 +265,10 @@ export default function HomePage() {
                 <input className={inputCls} type="number" step="0.1" value={form.volumen} onChange={(e) => setForm({ ...form, volumen: e.target.value })} placeholder="8" />
               </div>
               <div>
-                <Label>Consorcio actual</Label>
-                <input className={inputCls} value={form.consorcio} onChange={(e) => setForm({ ...form, consorcio: e.target.value })} placeholder="Constructora X" list="consorcio-list" />
-                <datalist id="consorcio-list">
-                  {consorciosKnown.map((c) => <option key={c} value={c} />)}
+                <Label>Obra</Label>
+                <input className={inputCls} value={form.consorcio} onChange={(e) => setForm({ ...form, consorcio: e.target.value })} placeholder="Obra Norte" list="obra-list" />
+                <datalist id="obra-list">
+                  {obrasKnown.map((c) => <option key={c} value={c} />)}
                 </datalist>
               </div>
             </div>
@@ -281,7 +278,7 @@ export default function HomePage() {
             </div>
             {err ? <div className="text-sm text-red-600">{err}</div> : null}
             <p className="text-xs text-zinc-500">
-              La tarifa ahora se define por <strong>ruta</strong> dentro de cada consorcio. Tras crear el vehículo, andá a su consorcio y definí rutas con sus precios.
+              La tarifa se define por <strong>ruta</strong> dentro de cada obra. Creá la obra desde el menú Obra y luego asignala al vehículo.
             </p>
             <button type="submit" className={btnCls}>Guardar</button>
           </form>
@@ -317,9 +314,9 @@ export default function HomePage() {
                       <input className={inputCls} type="number" step="0.1" value={editForm.volumen} onChange={(e) => setEditForm({ ...editForm, volumen: e.target.value })} />
                     </div>
                     <div className="col-span-2">
-                      <Label>Consorcio actual</Label>
-                      <input className={inputCls} value={editForm.consorcio} onChange={(e) => setEditForm({ ...editForm, consorcio: e.target.value })} list="consorcio-list" />
-                      <p className="text-xs text-zinc-500 mt-1">Solo afecta viajes nuevos. Los viejos conservan su consorcio histórico.</p>
+                      <Label>Obra</Label>
+                      <input className={inputCls} value={editForm.consorcio} onChange={(e) => setEditForm({ ...editForm, consorcio: e.target.value })} list="obra-list" />
+                      <p className="text-xs text-zinc-500 mt-1">Solo afecta viajes nuevos. Los viejos conservan su obra histórica.</p>
                     </div>
                   </div>
                   {editErr ? <div className="text-sm text-red-600">{editErr}</div> : null}
@@ -339,7 +336,7 @@ export default function HomePage() {
                     <div className="text-xs text-zinc-500 truncate">
                       {v.propietario ? <>prop: <span className="text-zinc-700 dark:text-zinc-300">{v.propietario}</span></> : "sin propietario"}
                       {v.conductor ? <> · cond: <span className="text-zinc-700 dark:text-zinc-300">{v.conductor}</span></> : null}
-                      {v.consorcio_actual ? <> · cons: <span className="text-zinc-700 dark:text-zinc-300">{v.consorcio_actual}</span></> : null}
+                      {v.consorcio_actual ? <> · obra: <span className="text-zinc-700 dark:text-zinc-300">{v.consorcio_actual}</span></> : null}
                     </div>
                   </div>
                   <div className="flex gap-2 shrink-0">
