@@ -1,9 +1,9 @@
 "use client";
 import { Suspense, useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
-import { Card, H2, Label, Stat, btnCls, inputCls } from "@/components/ui";
+import { Card, H2, Label, Stat, inputCls } from "@/components/ui";
 import { VehiculoSelector } from "@/components/VehiculoSelector";
-import { money, num, today } from "@/lib/format";
+import { money, num } from "@/lib/format";
 import { cobradoDeRegistro, facturadoDeRegistro, totalesRegistros, vehiculosByPlaca } from "@/lib/calc";
 import type { Vehiculo, Registro, Anticipo } from "@/lib/types";
 
@@ -21,24 +21,9 @@ export function ClienteInner({ fixedConsorcio }: { fixedConsorcio?: string }) {
   const [hasta, setHasta] = useState("");
   const activeConsorcio = fixedConsorcio ?? consorcio;
 
-  const [form, setForm] = useState({
-    fecha: today(),
-    placa: initialPlaca,
-    consorcio: initialConsorcio,
-    monto: "",
-    notas: "",
-  });
-
   async function loadVehiculos() {
     const vs: Vehiculo[] = await fetch("/api/vehiculos").then((r) => r.json());
     setVehiculos(vs);
-    if (!form.placa && vs[0]) {
-      setForm((f) => ({
-        ...f,
-        placa: vs[0].placa,
-        consorcio: fixedConsorcio ?? (f.consorcio || vs[0].consorcio_actual || ""),
-      }));
-    }
   }
 
   async function loadData() {
@@ -57,63 +42,6 @@ export function ClienteInner({ fixedConsorcio }: { fixedConsorcio?: string }) {
 
   useEffect(() => { loadVehiculos(); }, []);
   useEffect(() => { loadData(); }, [placa, activeConsorcio, desde, hasta]);
-
-  function pickPlaca(p: string) {
-    const v = vehiculos.find((x) => x.placa === p);
-    setForm((f) => ({ ...f, placa: p, consorcio: fixedConsorcio ?? v?.consorcio_actual ?? f.consorcio }));
-  }
-
-  async function addAnticipo(e: React.FormEvent) {
-    e.preventDefault();
-    const res = await fetch("/api/anticipos", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        fecha: form.fecha,
-        placa: form.placa,
-        consorcio: activeConsorcio || form.consorcio || null,
-        monto: Number(form.monto || 0),
-        notas: form.notas || null,
-      }),
-    });
-    if (!res.ok) {
-      alert("No se pudo guardar");
-      return;
-    }
-    setForm((f) => ({ ...f, monto: "", notas: "" }));
-    loadData();
-  }
-
-  async function delAnticipo(id: number) {
-    if (!confirm("Eliminar anticipo?")) return;
-    await fetch(`/api/anticipos/${id}`, { method: "DELETE" });
-    loadData();
-  }
-
-  // Edit anticipo inline
-  const [editingAntId, setEditingAntId] = useState<number | null>(null);
-  const [editAnt, setEditAnt] = useState({ fecha: "", monto: "", consorcio: "", notas: "" });
-
-  function startEditAnt(a: Anticipo) {
-    setEditingAntId(a.id);
-    setEditAnt({ fecha: a.fecha, monto: String(a.monto), consorcio: a.consorcio ?? "", notas: a.notas ?? "" });
-  }
-
-  async function saveEditAnt(id: number) {
-    const res = await fetch(`/api/anticipos/${id}`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        fecha: editAnt.fecha,
-        monto: Number(editAnt.monto || 0),
-        consorcio: editAnt.consorcio || null,
-        notas: editAnt.notas || null,
-      }),
-    });
-    if (!res.ok) { alert("No se pudo guardar"); return; }
-    setEditingAntId(null);
-    loadData();
-  }
 
   const vByPlaca = useMemo(() => vehiculosByPlaca(vehiculos), [vehiculos]);
   const totales = useMemo(() => totalesRegistros(registros, vByPlaca), [registros, vByPlaca]);
@@ -175,46 +103,8 @@ export function ClienteInner({ fixedConsorcio }: { fixedConsorcio?: string }) {
         <Stat label="Por cobrar" value={money(totales.facturado - totalAnticipos)} hint="fact − anticipos" />
       </section>
 
-      <section className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        <Card className="lg:col-span-1">
-          <H2>Registrar anticipo</H2>
-          <form onSubmit={addAnticipo} className="space-y-3">
-            <div>
-              <Label>Fecha</Label>
-              <input className={inputCls} type="date" value={form.fecha} onChange={(e) => setForm({ ...form, fecha: e.target.value })} required />
-            </div>
-            <div>
-              <Label>Placa</Label>
-              <VehiculoSelector value={form.placa} vehiculos={vehiculos} onChange={pickPlaca} allowAll={false} />
-            </div>
-            <div>
-              <Label>Obra</Label>
-              {fixedConsorcio ? (
-                <div className="rounded-md border border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-950 px-3 py-2 text-sm font-medium">
-                  {fixedConsorcio}
-                </div>
-              ) : (
-                <>
-                  <input className={inputCls} value={form.consorcio} onChange={(e) => setForm({ ...form, consorcio: e.target.value })} placeholder="Constructora X" list="cliente-form-cons" />
-                  <datalist id="cliente-form-cons">
-                    {consorciosKnown.map((c) => <option key={c} value={c} />)}
-                  </datalist>
-                </>
-              )}
-            </div>
-            <div>
-              <Label>Monto</Label>
-              <input className={inputCls} type="number" step="0.01" value={form.monto} onChange={(e) => setForm({ ...form, monto: e.target.value })} placeholder="200000" required />
-            </div>
-            <div>
-              <Label>Notas</Label>
-              <input className={inputCls} value={form.notas} onChange={(e) => setForm({ ...form, notas: e.target.value })} placeholder="Adelanto semana…" />
-            </div>
-            <button type="submit" className={btnCls}>Guardar anticipo</button>
-          </form>
-        </Card>
-
-        <Card className="lg:col-span-2">
+      <section className="grid grid-cols-1 gap-6">
+        <Card>
           <H2>Viajes</H2>
           {registros.length === 0 ? (
             <p className="text-sm text-zinc-500">Sin viajes para el filtro actual.</p>
@@ -265,33 +155,16 @@ export function ClienteInner({ fixedConsorcio }: { fixedConsorcio?: string }) {
                     <th className="py-2 pr-3">Obra</th>
                     <th className="py-2 pr-3 text-right">Monto</th>
                     <th className="py-2 pr-3">Notas</th>
-                    <th className="py-2"></th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-zinc-200 dark:divide-zinc-800">
-                  {anticipos.map((a) => editingAntId === a.id ? (
-                    <tr key={a.id} className="bg-zinc-50 dark:bg-zinc-900/50">
-                      <td className="py-2 pr-3"><input className={inputCls} type="date" value={editAnt.fecha} onChange={(e) => setEditAnt({ ...editAnt, fecha: e.target.value })} /></td>
-                      <td className="py-2 pr-3 font-medium">{a.placa}</td>
-                      <td className="py-2 pr-3"><input className={inputCls} value={editAnt.consorcio} onChange={(e) => setEditAnt({ ...editAnt, consorcio: e.target.value })} list="cliente-cons-list" /></td>
-                      <td className="py-2 pr-3"><input className={inputCls + " text-right"} type="number" step="0.01" value={editAnt.monto} onChange={(e) => setEditAnt({ ...editAnt, monto: e.target.value })} /></td>
-                      <td className="py-2 pr-3"><input className={inputCls} value={editAnt.notas} onChange={(e) => setEditAnt({ ...editAnt, notas: e.target.value })} /></td>
-                      <td className="py-2 text-right whitespace-nowrap">
-                        <button onClick={() => saveEditAnt(a.id)} className="text-xs text-emerald-600 hover:underline mr-2">guardar</button>
-                        <button onClick={() => setEditingAntId(null)} className="text-xs text-zinc-500 hover:underline">cancelar</button>
-                      </td>
-                    </tr>
-                  ) : (
+                  {anticipos.map((a) => (
                     <tr key={a.id}>
                       <td className="py-2 pr-3 whitespace-nowrap">{a.fecha}</td>
                       <td className="py-2 pr-3 font-medium">{a.placa}</td>
                       <td className="py-2 pr-3 text-zinc-500">{a.consorcio ?? "—"}</td>
                       <td className="py-2 pr-3 text-right">{money(a.monto)}</td>
                       <td className="py-2 pr-3 text-zinc-500">{a.notas ?? ""}</td>
-                      <td className="py-2 text-right whitespace-nowrap">
-                        <button onClick={() => startEditAnt(a)} className="text-xs text-zinc-600 dark:text-zinc-400 hover:underline mr-2">editar</button>
-                        <button onClick={() => delAnticipo(a.id)} className="text-xs text-red-600 hover:underline">eliminar</button>
-                      </td>
                     </tr>
                   ))}
                 </tbody>

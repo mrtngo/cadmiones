@@ -1,8 +1,8 @@
 "use client";
 import { use, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { Card, H2, Label, Stat, btnGhostCls, inputCls } from "@/components/ui";
-import { money, num } from "@/lib/format";
+import { Card, H2, Label, Stat, btnCls, btnGhostCls, inputCls } from "@/components/ui";
+import { money, num, today } from "@/lib/format";
 import { totalesRegistros, vehiculosByPlaca } from "@/lib/calc";
 import type { Vehiculo, Registro, Anticipo, Combustible } from "@/lib/types";
 
@@ -20,6 +20,14 @@ export default function PropietarioPage({
   const [combustibles, setCombustibles] = useState<Combustible[]>([]);
   const [desde, setDesde] = useState("");
   const [hasta, setHasta] = useState("");
+  const [anticipoForm, setAnticipoForm] = useState({
+    fecha: today(),
+    placa: "",
+    monto: "",
+    notas: "",
+  });
+  const [editingAntId, setEditingAntId] = useState<number | null>(null);
+  const [editAnt, setEditAnt] = useState({ fecha: "", monto: "", consorcio: "", notas: "" });
 
   async function loadAll() {
     const qs = new URLSearchParams();
@@ -46,6 +54,10 @@ export default function PropietarioPage({
   const myRegistros = useMemo(() => registros.filter((r) => placas.has(r.placa)), [registros, placas]);
   const myAnticipos = useMemo(() => anticipos.filter((a) => placas.has(a.placa)), [anticipos, placas]);
   const myCombustibles = useMemo(() => combustibles.filter((c) => placas.has(c.placa)), [combustibles, placas]);
+  const selectedAnticipoVehiculo = useMemo(
+    () => mine.find((v) => v.placa === anticipoForm.placa),
+    [mine, anticipoForm.placa]
+  );
 
   const totales = useMemo(() => totalesRegistros(myRegistros, vByPlaca), [myRegistros, vByPlaca]);
   const totalAnticipos = useMemo(() => myAnticipos.reduce((s, a) => s + a.monto, 0), [myAnticipos]);
@@ -63,6 +75,68 @@ export default function PropietarioPage({
       return { v, ...t, anticipos: ant, porCobrar: t.facturado - ant };
     });
   }, [mine, myRegistros, myAnticipos, vByPlaca]);
+
+  async function addAnticipo(e: React.FormEvent) {
+    e.preventDefault();
+    const vehiculo = mine.find((v) => v.placa === anticipoForm.placa);
+    if (!vehiculo) {
+      alert("Elegí una placa del propietario");
+      return;
+    }
+
+    const res = await fetch("/api/anticipos", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        fecha: anticipoForm.fecha,
+        placa: vehiculo.placa,
+        consorcio: vehiculo.consorcio_actual || null,
+        monto: Number(anticipoForm.monto || 0),
+        notas: anticipoForm.notas || null,
+      }),
+    });
+    if (!res.ok) {
+      alert("No se pudo guardar");
+      return;
+    }
+    setAnticipoForm((f) => ({ ...f, monto: "", notas: "" }));
+    loadAll();
+  }
+
+  async function delAnticipo(id: number) {
+    if (!confirm("Eliminar anticipo?")) return;
+    await fetch(`/api/anticipos/${id}`, { method: "DELETE" });
+    loadAll();
+  }
+
+  function startEditAnt(a: Anticipo) {
+    setEditingAntId(a.id);
+    setEditAnt({
+      fecha: a.fecha,
+      monto: String(a.monto),
+      consorcio: a.consorcio ?? "",
+      notas: a.notas ?? "",
+    });
+  }
+
+  async function saveEditAnt(id: number) {
+    const res = await fetch(`/api/anticipos/${id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        fecha: editAnt.fecha,
+        monto: Number(editAnt.monto || 0),
+        consorcio: editAnt.consorcio || null,
+        notas: editAnt.notas || null,
+      }),
+    });
+    if (!res.ok) {
+      alert("No se pudo guardar");
+      return;
+    }
+    setEditingAntId(null);
+    loadAll();
+  }
 
   return (
     <div className="space-y-6">
@@ -144,8 +218,73 @@ export default function PropietarioPage({
         )}
       </Card>
 
-      <Card>
-        <H2>Anticipos</H2>
+      <section className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <Card className="lg:col-span-1">
+          <H2>Registrar anticipo</H2>
+          {mine.length === 0 ? (
+            <p className="text-sm text-zinc-500">Este propietario no tiene placas para asociar anticipos.</p>
+          ) : (
+            <form onSubmit={addAnticipo} className="space-y-3">
+              <div>
+                <Label>Fecha</Label>
+                <input
+                  className={inputCls}
+                  type="date"
+                  value={anticipoForm.fecha}
+                  onChange={(e) => setAnticipoForm({ ...anticipoForm, fecha: e.target.value })}
+                  required
+                />
+              </div>
+              <div>
+                <Label>Placa</Label>
+                <select
+                  className={inputCls}
+                  value={anticipoForm.placa}
+                  onChange={(e) => setAnticipoForm({ ...anticipoForm, placa: e.target.value })}
+                  required
+                >
+                  <option value="">Elegir placa</option>
+                  {mine.map((v) => (
+                    <option key={v.placa} value={v.placa}>
+                      {v.placa}{v.alias ? ` · ${v.alias}` : ""}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <Label>Obra vinculada</Label>
+                <div className="rounded-md border border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-950 px-3 py-2 text-sm font-medium">
+                  {selectedAnticipoVehiculo?.consorcio_actual ?? "Sin obra en la placa"}
+                </div>
+              </div>
+              <div>
+                <Label>Monto</Label>
+                <input
+                  className={inputCls}
+                  type="number"
+                  step="0.01"
+                  value={anticipoForm.monto}
+                  onChange={(e) => setAnticipoForm({ ...anticipoForm, monto: e.target.value })}
+                  placeholder="200000"
+                  required
+                />
+              </div>
+              <div>
+                <Label>Notas</Label>
+                <input
+                  className={inputCls}
+                  value={anticipoForm.notas}
+                  onChange={(e) => setAnticipoForm({ ...anticipoForm, notas: e.target.value })}
+                  placeholder="Adelanto semana..."
+                />
+              </div>
+              <button type="submit" className={btnCls}>Guardar anticipo</button>
+            </form>
+          )}
+        </Card>
+
+        <Card className="lg:col-span-2">
+          <H2>Anticipos</H2>
         {myAnticipos.length === 0 ? (
           <p className="text-sm text-zinc-500">Sin anticipos en el rango.</p>
         ) : (
@@ -158,23 +297,41 @@ export default function PropietarioPage({
                   <th className="py-2 pr-3">Consorcio</th>
                   <th className="py-2 pr-3 text-right">Monto</th>
                   <th className="py-2 pr-3">Notas</th>
+                  <th className="py-2"></th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-zinc-200 dark:divide-zinc-800">
-                {myAnticipos.map((a) => (
+                {myAnticipos.map((a) => editingAntId === a.id ? (
+                  <tr key={a.id} className="bg-zinc-50 dark:bg-zinc-900/50">
+                    <td className="py-2 pr-3"><input className={inputCls} type="date" value={editAnt.fecha} onChange={(e) => setEditAnt({ ...editAnt, fecha: e.target.value })} /></td>
+                    <td className="py-2 pr-3 font-medium">{a.placa}</td>
+                    <td className="py-2 pr-3"><input className={inputCls} value={editAnt.consorcio} onChange={(e) => setEditAnt({ ...editAnt, consorcio: e.target.value })} /></td>
+                    <td className="py-2 pr-3"><input className={inputCls + " text-right"} type="number" step="0.01" value={editAnt.monto} onChange={(e) => setEditAnt({ ...editAnt, monto: e.target.value })} /></td>
+                    <td className="py-2 pr-3"><input className={inputCls} value={editAnt.notas} onChange={(e) => setEditAnt({ ...editAnt, notas: e.target.value })} /></td>
+                    <td className="py-2 text-right whitespace-nowrap">
+                      <button onClick={() => saveEditAnt(a.id)} className="text-xs text-emerald-600 hover:underline mr-2">guardar</button>
+                      <button onClick={() => setEditingAntId(null)} className="text-xs text-zinc-500 hover:underline">cancelar</button>
+                    </td>
+                  </tr>
+                ) : (
                   <tr key={a.id}>
                     <td className="py-2 pr-3 whitespace-nowrap">{a.fecha}</td>
                     <td className="py-2 pr-3 font-medium">{a.placa}</td>
                     <td className="py-2 pr-3 text-zinc-500">{a.consorcio ?? "—"}</td>
                     <td className="py-2 pr-3 text-right">{money(a.monto)}</td>
                     <td className="py-2 pr-3 text-zinc-500">{a.notas ?? ""}</td>
+                    <td className="py-2 text-right whitespace-nowrap">
+                      <button onClick={() => startEditAnt(a)} className="text-xs text-zinc-600 dark:text-zinc-400 hover:underline mr-2">editar</button>
+                      <button onClick={() => delAnticipo(a.id)} className="text-xs text-red-600 hover:underline">eliminar</button>
+                    </td>
                   </tr>
                 ))}
               </tbody>
             </table>
           </div>
         )}
-      </Card>
+        </Card>
+      </section>
     </div>
   );
 }
