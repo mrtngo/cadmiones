@@ -37,7 +37,7 @@ try {
             <Link href="/" className="font-bold tracking-tight text-lg">cadmiones</Link>
             <div className="flex gap-4 text-sm">
               <Link href="/" className="hover:underline">Inicio</Link>
-              <Link href="/conductor" className="hover:underline">Propietario</Link>
+              <Link href="/propietario" className="hover:underline">Propietario</Link>
               <Link href="/obra" className="hover:underline">Obra</Link>
               <Link href="/combustible" className="hover:underline">Combustible</Link>
             </div>
