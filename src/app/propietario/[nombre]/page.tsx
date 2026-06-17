@@ -371,7 +371,7 @@ export default function PropietarioPage({
                   ) : (
                     <p className="text-xs text-amber-600">
                       Sin rutas en <strong>{viajeConsorcio}</strong>.{" "}
-                      <Link className="underline" href={`/consorcio/${encodeURIComponent(viajeConsorcio)}`}>
+                      <Link className="underline" href={`/obra/${encodeURIComponent(viajeConsorcio)}`}>
                         Crear ruta
                       </Link>
                     </p>

@@ -222,16 +222,16 @@ export default function HomePage() {
       </section>
 
       <section>
-        <H2>Consorcios</H2>
+        <H2>Obras</H2>
         {consorcios.length === 0 ? (
-          <p className="text-sm text-zinc-500">Sin consorcios todavía. Se crean al asignarlos a vehículos o al cargar registros.</p>
+          <p className="text-sm text-zinc-500">Sin obras todavía. Se crean desde el menú Obra o al asignarlas a vehículos.</p>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
             {consorcios.map((c) => (
               <GroupCard
                 key={c.nombre}
                 group={c}
-                href={c.nombre !== SIN_CONS ? `/consorcio/${encodeURIComponent(c.nombre)}` : null}
+                href={c.nombre !== SIN_CONS ? `/obra/${encodeURIComponent(c.nombre)}` : null}
               />
             ))}
           </div>

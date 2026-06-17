@@ -210,7 +210,7 @@ function ConductorInner() {
               {vehiculoForm ? (
                 <p className="text-xs text-zinc-500 mt-1">
                   {vehiculoForm.volumen_m3 ? `${num(vehiculoForm.volumen_m3, 1)} m³ · ` : ""}
-                  consorcio: <strong>{consorcioForm ?? "—"}</strong>
+                  obra: <strong>{consorcioForm ?? "—"}</strong>
                 </p>
               ) : null}
             </div>
@@ -233,13 +233,13 @@ function ConductorInner() {
                 ) : (
                   <p className="text-xs text-amber-600">
                     Sin rutas en <strong>{consorcioForm}</strong>.{" "}
-                    <Link className="underline" href={`/consorcio/${encodeURIComponent(consorcioForm)}`}>
+                    <Link className="underline" href={`/obra/${encodeURIComponent(consorcioForm)}`}>
                       Crear ruta →
                     </Link>
                   </p>
                 )
               ) : (
-                <p className="text-xs text-zinc-500">El vehículo no tiene consorcio asignado. Asignale uno desde el home antes de registrar viajes con ruta.</p>
+                <p className="text-xs text-zinc-500">El vehículo no tiene obra asignada. Asignale una desde el home antes de registrar viajes con ruta.</p>
               )}
             </div>
             <div>
