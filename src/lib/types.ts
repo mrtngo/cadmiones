@@ -33,6 +33,7 @@ export type Registro = {
   gasto_gasolina: number;
   precio_gasolina: number | null;
   notas: string | null;
+  image_url: string | null;
   created_at: string;
 };
 
@@ -44,6 +45,7 @@ export type Combustible = {
   galones: number | null;
   precio_galon: number | null;
   notas: string | null;
+  image_url: string | null;
   created_at: string;
 };
 

@@ -1,8 +1,10 @@
 "use client";
 import { Suspense, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
+import Image from "next/image";
 import { useSearchParams } from "next/navigation";
 import { Card, H2, Label, Stat, btnCls, inputCls } from "@/components/ui";
+import { ImageUploadField } from "@/components/ImageUploadField";
 import { VehiculoSelector } from "@/components/VehiculoSelector";
 import { money, num, today } from "@/lib/format";
 import { cobradoDeRegistro, facturadoDeRegistro, totalesRegistros, vehiculosByPlaca } from "@/lib/calc";
@@ -27,6 +29,7 @@ function ConductorInner() {
     ruta_id: "",
     km: "",
     notas: "",
+    image_url: "",
   });
 
   async function loadVehiculos() {
@@ -87,13 +90,14 @@ function ConductorInner() {
         ruta_id: form.ruta_id ? Number(form.ruta_id) : null,
         km_recorridos: Number(form.km || 0),
         notas: form.notas || null,
+        image_url: form.image_url || null,
       }),
     });
     if (!res.ok) {
       alert("No se pudo guardar");
       return;
     }
-    setForm((f) => ({ ...f, km: "", notas: "" }));
+    setForm((f) => ({ ...f, km: "", notas: "", image_url: "" }));
     loadRegistros();
   }
 
@@ -105,11 +109,11 @@ function ConductorInner() {
 
   // Edit viaje inline
   const [editingViajeId, setEditingViajeId] = useState<number | null>(null);
-  const [editViaje, setEditViaje] = useState({ fecha: "", km: "", notas: "" });
+  const [editViaje, setEditViaje] = useState({ fecha: "", km: "", notas: "", image_url: "" });
 
   function startEditViaje(r: Registro) {
     setEditingViajeId(r.id);
-    setEditViaje({ fecha: r.fecha, km: String(r.km_recorridos), notas: r.notas ?? "" });
+    setEditViaje({ fecha: r.fecha, km: String(r.km_recorridos), notas: r.notas ?? "", image_url: r.image_url ?? "" });
   }
 
   async function saveEditViaje(id: number) {
@@ -120,6 +124,7 @@ function ConductorInner() {
         fecha: editViaje.fecha,
         km_recorridos: Number(editViaje.km || 0),
         notas: editViaje.notas || null,
+        image_url: editViaje.image_url || null,
       }),
     });
     if (!res.ok) { alert("No se pudo guardar"); return; }
@@ -253,6 +258,12 @@ function ConductorInner() {
               <Label>Notas</Label>
               <input className={inputCls} value={form.notas} onChange={(e) => setForm({ ...form, notas: e.target.value })} placeholder="Observaciones…" />
             </div>
+            <ImageUploadField
+              label="Imagen"
+              value={form.image_url}
+              onChange={(image_url) => setForm({ ...form, image_url })}
+              alt="Imagen del viaje"
+            />
             <button type="submit" className={btnCls}>Guardar viaje</button>
           </form>
         </Card>
@@ -272,6 +283,7 @@ function ConductorInner() {
                     <th className="py-2 pr-3 text-right">Km</th>
                     <th className="py-2 pr-3 text-right">Facturado</th>
                     <th className="py-2 pr-3 text-right">Cobrado</th>
+                    <th className="py-2 pr-3">Imagen</th>
                     <th className="py-2"></th>
                   </tr>
                 </thead>
@@ -291,6 +303,14 @@ function ConductorInner() {
                           <td className="py-2 pr-3"><input className={inputCls + " text-right"} type="number" step="0.1" value={editViaje.km} onChange={(e) => setEditViaje({ ...editViaje, km: e.target.value })} /></td>
                           <td className="py-2 pr-3 text-right text-zinc-500">{money(fact)}</td>
                           <td className="py-2 pr-3 text-right text-zinc-500">{money(cobr)}</td>
+                          <td className="py-2 pr-3 min-w-40">
+                            <ImageUploadField
+                              label="Imagen"
+                              value={editViaje.image_url}
+                              onChange={(image_url) => setEditViaje({ ...editViaje, image_url })}
+                              alt="Imagen del viaje"
+                            />
+                          </td>
                           <td className="py-2 text-right whitespace-nowrap">
                             <button onClick={() => saveEditViaje(r.id)} className="text-xs text-emerald-600 hover:underline mr-2">guardar</button>
                             <button onClick={() => setEditingViajeId(null)} className="text-xs text-zinc-500 hover:underline">cancelar</button>
@@ -306,6 +326,22 @@ function ConductorInner() {
                         <td className="py-2 pr-3 text-right">{num(r.km_recorridos, 1)}</td>
                         <td className="py-2 pr-3 text-right">{money(facturadoDeRegistro(r, v))}</td>
                         <td className="py-2 pr-3 text-right">{money(cobradoDeRegistro(r, v))}</td>
+                        <td className="py-2 pr-3">
+                          {r.image_url ? (
+                            <a href={r.image_url} target="_blank" rel="noreferrer" className="block w-fit">
+                              <Image
+                                src={r.image_url}
+                                alt="Imagen del viaje"
+                                width={64}
+                                height={48}
+                                unoptimized
+                                className="h-12 w-16 rounded border border-zinc-200 object-cover dark:border-zinc-800"
+                              />
+                            </a>
+                          ) : (
+                            <span className="text-zinc-400">—</span>
+                          )}
+                        </td>
                         <td className="py-2 text-right whitespace-nowrap">
                           <button onClick={() => startEditViaje(r)} className="text-xs text-zinc-600 dark:text-zinc-400 hover:underline mr-2">editar</button>
                           <button onClick={() => delRegistro(r.id)} className="text-xs text-red-600 hover:underline">eliminar</button>

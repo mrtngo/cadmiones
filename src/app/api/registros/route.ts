@@ -31,6 +31,7 @@ export async function POST(req: Request) {
     ? null
     : Number(body.precio_gasolina);
   const notas = body.notas ? String(body.notas) : null;
+  const image_url = body.image_url ? String(body.image_url) : null;
 
   if (!fecha) return NextResponse.json({ error: "fecha requerida" }, { status: 400 });
   if (!placa) return NextResponse.json({ error: "placa requerida" }, { status: 400 });
@@ -67,12 +68,12 @@ export async function POST(req: Request) {
     INSERT INTO registros (
       fecha, placa, consorcio, ruta_id, ruta_nombre, m3,
       precio_facturado_m3km, precio_cobrado_m3km,
-      km_recorridos, gasto_gasolina, precio_gasolina, notas
+      km_recorridos, gasto_gasolina, precio_gasolina, notas, image_url
     )
     VALUES (
       ${fecha}, ${placa}, ${consorcio}, ${ruta_id}, ${ruta_nombre}, ${m3},
       ${precio_facturado_m3km}, ${precio_cobrado_m3km},
-      ${km_recorridos}, ${gasto_gasolina}, ${precio_gasolina}, ${notas}
+      ${km_recorridos}, ${gasto_gasolina}, ${precio_gasolina}, ${notas}, ${image_url}
     )
     RETURNING *
   `;

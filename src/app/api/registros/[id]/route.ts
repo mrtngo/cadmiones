@@ -20,6 +20,7 @@ export async function PATCH(
   if (body.notas !== undefined) updates.notas = body.notas ? String(body.notas) : null;
   if (body.gasto_gasolina !== undefined) updates.gasto_gasolina = Number(body.gasto_gasolina);
   if (body.precio_gasolina !== undefined) updates.precio_gasolina = numOrNull(body.precio_gasolina);
+  if (body.image_url !== undefined) updates.image_url = body.image_url ? String(body.image_url) : null;
   if (Object.keys(updates).length === 0) {
     return NextResponse.json({ error: "nada que actualizar" }, { status: 400 });
   }

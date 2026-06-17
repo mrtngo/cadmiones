@@ -33,14 +33,15 @@ export async function POST(req: Request) {
   const galones = numOrNull(body.galones);
   const precio_galon = numOrNull(body.precio_galon);
   const notas = body.notas ? String(body.notas) : null;
+  const image_url = body.image_url ? String(body.image_url) : null;
 
   if (!fecha) return NextResponse.json({ error: "fecha requerida" }, { status: 400 });
   if (!placa) return NextResponse.json({ error: "placa requerida" }, { status: 400 });
   if (!monto) return NextResponse.json({ error: "monto requerido" }, { status: 400 });
 
   const [row] = await sql<Combustible[]>`
-    INSERT INTO combustibles (fecha, placa, monto, galones, precio_galon, notas)
-    VALUES (${fecha}, ${placa}, ${monto}, ${galones}, ${precio_galon}, ${notas})
+    INSERT INTO combustibles (fecha, placa, monto, galones, precio_galon, notas, image_url)
+    VALUES (${fecha}, ${placa}, ${monto}, ${galones}, ${precio_galon}, ${notas}, ${image_url})
     RETURNING *
   `;
   return NextResponse.json(row, { status: 201 });

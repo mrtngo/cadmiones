@@ -1,7 +1,9 @@
 "use client";
 import { Suspense, useEffect, useMemo, useState } from "react";
+import Image from "next/image";
 import { useSearchParams } from "next/navigation";
 import { Card, H2, Label, Stat, btnCls, inputCls } from "@/components/ui";
+import { ImageUploadField } from "@/components/ImageUploadField";
 import { VehiculoSelector } from "@/components/VehiculoSelector";
 import { money, num, today } from "@/lib/format";
 import type { Vehiculo, Combustible } from "@/lib/types";
@@ -23,6 +25,7 @@ function CombustibleInner() {
     galones: "",
     precio_galon: "",
     notas: "",
+    image_url: "",
   });
 
   async function loadVehiculos() {
@@ -72,13 +75,14 @@ function CombustibleInner() {
         galones: form.galones || null,
         precio_galon: form.precio_galon || null,
         notas: form.notas || null,
+        image_url: form.image_url || null,
       }),
     });
     if (!res.ok) {
       alert("No se pudo guardar");
       return;
     }
-    setForm((f) => ({ ...f, monto: "", galones: "", precio_galon: "", notas: "" }));
+    setForm((f) => ({ ...f, monto: "", galones: "", precio_galon: "", notas: "", image_url: "" }));
     loadCombustibles();
   }
 
@@ -90,7 +94,7 @@ function CombustibleInner() {
 
   // Edit tanqueada inline
   const [editingCombId, setEditingCombId] = useState<number | null>(null);
-  const [editComb, setEditComb] = useState({ fecha: "", monto: "", galones: "", precio_galon: "", notas: "" });
+  const [editComb, setEditComb] = useState({ fecha: "", monto: "", galones: "", precio_galon: "", notas: "", image_url: "" });
 
   function startEditComb(c: Combustible) {
     setEditingCombId(c.id);
@@ -100,6 +104,7 @@ function CombustibleInner() {
       galones: c.galones != null ? String(c.galones) : "",
       precio_galon: c.precio_galon != null ? String(c.precio_galon) : "",
       notas: c.notas ?? "",
+      image_url: c.image_url ?? "",
     });
   }
 
@@ -113,6 +118,7 @@ function CombustibleInner() {
         galones: editComb.galones || null,
         precio_galon: editComb.precio_galon || null,
         notas: editComb.notas || null,
+        image_url: editComb.image_url || null,
       }),
     });
     if (!res.ok) { alert("No se pudo guardar"); return; }
@@ -195,6 +201,12 @@ function CombustibleInner() {
               <Label>Notas</Label>
               <input className={inputCls} value={form.notas} onChange={(e) => setForm({ ...form, notas: e.target.value })} placeholder="Estación, kilómetro…" />
             </div>
+            <ImageUploadField
+              label="Imagen"
+              value={form.image_url}
+              onChange={(image_url) => setForm({ ...form, image_url })}
+              alt="Imagen de la tanqueada"
+            />
             <button type="submit" className={btnCls}>Guardar tanqueada</button>
           </form>
         </Card>
@@ -214,6 +226,7 @@ function CombustibleInner() {
                     <th className="py-2 pr-3 text-right">Precio /gal</th>
                     <th className="py-2 pr-3 text-right">Monto</th>
                     <th className="py-2 pr-3">Notas</th>
+                    <th className="py-2 pr-3">Imagen</th>
                     <th className="py-2"></th>
                   </tr>
                 </thead>
@@ -226,6 +239,14 @@ function CombustibleInner() {
                       <td className="py-2 pr-3"><input className={inputCls + " text-right"} type="number" step="0.01" value={editComb.precio_galon} onChange={(e) => setEditComb({ ...editComb, precio_galon: e.target.value })} /></td>
                       <td className="py-2 pr-3"><input className={inputCls + " text-right"} type="number" step="0.01" value={editComb.monto} onChange={(e) => setEditComb({ ...editComb, monto: e.target.value })} /></td>
                       <td className="py-2 pr-3"><input className={inputCls} value={editComb.notas} onChange={(e) => setEditComb({ ...editComb, notas: e.target.value })} /></td>
+                      <td className="py-2 pr-3 min-w-40">
+                        <ImageUploadField
+                          label="Imagen"
+                          value={editComb.image_url}
+                          onChange={(image_url) => setEditComb({ ...editComb, image_url })}
+                          alt="Imagen de la tanqueada"
+                        />
+                      </td>
                       <td className="py-2 text-right whitespace-nowrap">
                         <button onClick={() => saveEditComb(c.id)} className="text-xs text-emerald-600 hover:underline mr-2">guardar</button>
                         <button onClick={() => setEditingCombId(null)} className="text-xs text-zinc-500 hover:underline">cancelar</button>
@@ -239,6 +260,22 @@ function CombustibleInner() {
                       <td className="py-2 pr-3 text-right text-zinc-500">{c.precio_galon != null ? money(c.precio_galon) : "—"}</td>
                       <td className="py-2 pr-3 text-right font-medium">{money(c.monto)}</td>
                       <td className="py-2 pr-3 text-zinc-500">{c.notas ?? ""}</td>
+                      <td className="py-2 pr-3">
+                        {c.image_url ? (
+                          <a href={c.image_url} target="_blank" rel="noreferrer" className="block w-fit">
+                            <Image
+                              src={c.image_url}
+                              alt="Imagen de la tanqueada"
+                              width={64}
+                              height={48}
+                              unoptimized
+                              className="h-12 w-16 rounded border border-zinc-200 object-cover dark:border-zinc-800"
+                            />
+                          </a>
+                        ) : (
+                          <span className="text-zinc-400">—</span>
+                        )}
+                      </td>
                       <td className="py-2 text-right whitespace-nowrap">
                         <button onClick={() => startEditComb(c)} className="text-xs text-zinc-600 dark:text-zinc-400 hover:underline mr-2">editar</button>
                         <button onClick={() => delCombustible(c.id)} className="text-xs text-red-600 hover:underline">eliminar</button>

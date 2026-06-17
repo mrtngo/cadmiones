@@ -47,11 +47,13 @@ CREATE TABLE IF NOT EXISTS registros (
   gasto_gasolina           DOUBLE PRECISION NOT NULL DEFAULT 0,
   precio_gasolina          DOUBLE PRECISION,
   notas                    TEXT,
+  image_url                TEXT,
   created_at               TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 CREATE INDEX IF NOT EXISTS idx_registros_placa_fecha ON registros(placa, fecha);
 CREATE INDEX IF NOT EXISTS idx_registros_consorcio ON registros(consorcio);
 CREATE INDEX IF NOT EXISTS idx_registros_ruta ON registros(ruta_id);
+ALTER TABLE registros ADD COLUMN IF NOT EXISTS image_url TEXT;
 
 -- Tanqueadas. No están atadas a un viaje ni a un consorcio porque se
 -- carga combustible cada cierto tiempo, no por viaje.
@@ -63,9 +65,11 @@ CREATE TABLE IF NOT EXISTS combustibles (
   galones         DOUBLE PRECISION,
   precio_galon    DOUBLE PRECISION,
   notas           TEXT,
+  image_url       TEXT,
   created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 CREATE INDEX IF NOT EXISTS idx_combustibles_placa_fecha ON combustibles(placa, fecha);
+ALTER TABLE combustibles ADD COLUMN IF NOT EXISTS image_url TEXT;
 
 CREATE TABLE IF NOT EXISTS anticipos (
   id               BIGSERIAL PRIMARY KEY,
