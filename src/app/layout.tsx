@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import Link from "next/link";
+import { TruckLogo } from "@/components/TruckLogo";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import "./globals.css";
 
@@ -34,7 +35,10 @@ try {
       <body className="min-h-full flex flex-col bg-zinc-50 text-zinc-900 dark:bg-zinc-950 dark:text-zinc-100">
         <header className="border-b border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900">
           <nav className="max-w-6xl mx-auto px-4 sm:px-6 h-14 flex items-center gap-6">
-            <Link href="/" className="font-bold tracking-tight text-lg">cadmiones</Link>
+            <Link href="/" className="flex items-center gap-2 font-bold tracking-tight text-lg">
+              <TruckLogo />
+              <span>cadmiones</span>
+            </Link>
             <div className="flex gap-4 text-sm">
               <Link href="/" className="hover:underline">Inicio</Link>
               <Link href="/propietario" className="hover:underline">Propietario</Link>

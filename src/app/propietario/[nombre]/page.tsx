@@ -1,10 +1,12 @@
 "use client";
 import { use, useEffect, useMemo, useState } from "react";
+import Image from "next/image";
 import Link from "next/link";
 import { Card, H2, Label, Stat, btnCls, btnGhostCls, inputCls } from "@/components/ui";
+import { ImageUploadField } from "@/components/ImageUploadField";
 import { money, num, today } from "@/lib/format";
-import { totalesRegistros, vehiculosByPlaca } from "@/lib/calc";
-import type { Vehiculo, Registro, Anticipo, Combustible } from "@/lib/types";
+import { cobradoDeRegistro, facturadoDeRegistro, totalesRegistros, vehiculosByPlaca } from "@/lib/calc";
+import type { Vehiculo, Registro, Anticipo, Combustible, Ruta } from "@/lib/types";
 
 export default function PropietarioPage({
   params,
@@ -16,6 +18,7 @@ export default function PropietarioPage({
 
   const [vehiculos, setVehiculos] = useState<Vehiculo[]>([]);
   const [registros, setRegistros] = useState<Registro[]>([]);
+  const [rutas, setRutas] = useState<Ruta[]>([]);
   const [anticipos, setAnticipos] = useState<Anticipo[]>([]);
   const [combustibles, setCombustibles] = useState<Combustible[]>([]);
   const [desde, setDesde] = useState("");
@@ -28,19 +31,31 @@ export default function PropietarioPage({
   });
   const [editingAntId, setEditingAntId] = useState<number | null>(null);
   const [editAnt, setEditAnt] = useState({ fecha: "", monto: "", consorcio: "", notas: "" });
+  const [viajeForm, setViajeForm] = useState({
+    fecha: today(),
+    placa: "",
+    ruta_id: "",
+    km: "",
+    notas: "",
+    image_url: "",
+  });
+  const [editingViajeId, setEditingViajeId] = useState<number | null>(null);
+  const [editViaje, setEditViaje] = useState({ fecha: "", km: "", notas: "", image_url: "" });
 
   async function loadAll() {
     const qs = new URLSearchParams();
     if (desde) qs.set("desde", desde);
     if (hasta) qs.set("hasta", hasta);
-    const [vs, rs, as, cs] = await Promise.all([
+    const [vs, rs, rt, as, cs] = await Promise.all([
       fetch("/api/vehiculos").then((r) => r.json()),
       fetch(`/api/registros?${qs}`).then((r) => r.json()),
+      fetch("/api/rutas").then((r) => r.json()),
       fetch(`/api/anticipos?${qs}`).then((r) => r.json()),
       fetch(`/api/combustibles?${qs}`).then((r) => r.json()),
     ]);
     setVehiculos(vs);
     setRegistros(rs);
+    setRutas(rt);
     setAnticipos(as);
     setCombustibles(cs);
   }
@@ -58,6 +73,23 @@ export default function PropietarioPage({
     () => mine.find((v) => v.placa === anticipoForm.placa),
     [mine, anticipoForm.placa]
   );
+  const selectedViajeVehiculo = useMemo(
+    () => mine.find((v) => v.placa === viajeForm.placa),
+    [mine, viajeForm.placa]
+  );
+  const viajeConsorcio = selectedViajeVehiculo?.consorcio_actual ?? null;
+  const viajeRutas = useMemo(
+    () => (viajeConsorcio ? rutas.filter((r) => r.consorcio === viajeConsorcio) : []),
+    [rutas, viajeConsorcio]
+  );
+  const viajeRutaSel = useMemo(
+    () => (viajeForm.ruta_id ? rutas.find((r) => r.id === Number(viajeForm.ruta_id)) : undefined),
+    [viajeForm.ruta_id, rutas]
+  );
+  const viajePreviewKm = Number(viajeForm.km || 0);
+  const viajePreviewM3 = viajeRutaSel?.m3 ?? selectedViajeVehiculo?.volumen_m3 ?? 0;
+  const viajePreviewFacturado = viajeRutaSel ? viajePreviewM3 * viajePreviewKm * viajeRutaSel.precio_facturado_m3km : 0;
+  const viajePreviewCobrado = viajeRutaSel ? viajePreviewM3 * viajePreviewKm * viajeRutaSel.precio_cobrado_m3km : 0;
 
   const totales = useMemo(() => totalesRegistros(myRegistros, vByPlaca), [myRegistros, vByPlaca]);
   const totalAnticipos = useMemo(() => myAnticipos.reduce((s, a) => s + a.monto, 0), [myAnticipos]);
@@ -100,6 +132,69 @@ export default function PropietarioPage({
       return;
     }
     setAnticipoForm((f) => ({ ...f, monto: "", notas: "" }));
+    loadAll();
+  }
+
+  async function addViaje(e: React.FormEvent) {
+    e.preventDefault();
+    const vehiculo = mine.find((v) => v.placa === viajeForm.placa);
+    if (!vehiculo) {
+      alert("Elegí una placa del propietario");
+      return;
+    }
+
+    const res = await fetch("/api/registros", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        fecha: viajeForm.fecha,
+        placa: vehiculo.placa,
+        ruta_id: viajeForm.ruta_id ? Number(viajeForm.ruta_id) : null,
+        km_recorridos: Number(viajeForm.km || 0),
+        notas: viajeForm.notas || null,
+        image_url: viajeForm.image_url || null,
+      }),
+    });
+    if (!res.ok) {
+      alert("No se pudo guardar");
+      return;
+    }
+    setViajeForm((f) => ({ ...f, km: "", notas: "", image_url: "" }));
+    loadAll();
+  }
+
+  async function delViaje(id: number) {
+    if (!confirm("Eliminar viaje?")) return;
+    await fetch(`/api/registros/${id}`, { method: "DELETE" });
+    loadAll();
+  }
+
+  function startEditViaje(r: Registro) {
+    setEditingViajeId(r.id);
+    setEditViaje({
+      fecha: r.fecha,
+      km: String(r.km_recorridos),
+      notas: r.notas ?? "",
+      image_url: r.image_url ?? "",
+    });
+  }
+
+  async function saveEditViaje(id: number) {
+    const res = await fetch(`/api/registros/${id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        fecha: editViaje.fecha,
+        km_recorridos: Number(editViaje.km || 0),
+        notas: editViaje.notas || null,
+        image_url: editViaje.image_url || null,
+      }),
+    });
+    if (!res.ok) {
+      alert("No se pudo guardar");
+      return;
+    }
+    setEditingViajeId(null);
     loadAll();
   }
 
@@ -217,6 +312,201 @@ export default function PropietarioPage({
           </div>
         )}
       </Card>
+
+      <section className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <Card className="lg:col-span-1">
+          <H2>Registrar viaje</H2>
+          {mine.length === 0 ? (
+            <p className="text-sm text-zinc-500">Este propietario no tiene placas para registrar viajes.</p>
+          ) : (
+            <form onSubmit={addViaje} className="space-y-3">
+              <div>
+                <Label>Fecha</Label>
+                <input
+                  className={inputCls}
+                  type="date"
+                  value={viajeForm.fecha}
+                  onChange={(e) => setViajeForm({ ...viajeForm, fecha: e.target.value })}
+                  required
+                />
+              </div>
+              <div>
+                <Label>Placa</Label>
+                <select
+                  className={inputCls}
+                  value={viajeForm.placa}
+                  onChange={(e) => setViajeForm({ ...viajeForm, placa: e.target.value, ruta_id: "" })}
+                  required
+                >
+                  <option value="">Elegir placa</option>
+                  {mine.map((v) => (
+                    <option key={v.placa} value={v.placa}>
+                      {v.placa}{v.alias ? ` · ${v.alias}` : ""}
+                    </option>
+                  ))}
+                </select>
+                {selectedViajeVehiculo ? (
+                  <p className="text-xs text-zinc-500 mt-1">
+                    {selectedViajeVehiculo.volumen_m3 ? `${num(selectedViajeVehiculo.volumen_m3, 1)} m³ · ` : ""}
+                    obra: <strong>{viajeConsorcio ?? "—"}</strong>
+                  </p>
+                ) : null}
+              </div>
+              <div>
+                <Label>Ruta</Label>
+                {viajeConsorcio ? (
+                  viajeRutas.length > 0 ? (
+                    <select
+                      className={inputCls}
+                      value={viajeForm.ruta_id}
+                      onChange={(e) => setViajeForm({ ...viajeForm, ruta_id: e.target.value })}
+                    >
+                      <option value="">Sin ruta</option>
+                      {viajeRutas.map((r) => (
+                        <option key={r.id} value={r.id}>
+                          {r.nombre}{r.m3 != null ? ` · ${num(r.m3, 1)} m³` : ""} · fact {money(r.precio_facturado_m3km)} / cobr {money(r.precio_cobrado_m3km)}
+                        </option>
+                      ))}
+                    </select>
+                  ) : (
+                    <p className="text-xs text-amber-600">
+                      Sin rutas en <strong>{viajeConsorcio}</strong>.{" "}
+                      <Link className="underline" href={`/consorcio/${encodeURIComponent(viajeConsorcio)}`}>
+                        Crear ruta
+                      </Link>
+                    </p>
+                  )
+                ) : (
+                  <p className="text-xs text-zinc-500">La placa no tiene obra asignada.</p>
+                )}
+              </div>
+              <div>
+                <Label>Km del viaje</Label>
+                <input
+                  className={inputCls}
+                  type="number"
+                  step="0.1"
+                  value={viajeForm.km}
+                  onChange={(e) => setViajeForm({ ...viajeForm, km: e.target.value })}
+                  placeholder="120"
+                  required
+                />
+              </div>
+              {viajeRutaSel && viajePreviewKm > 0 ? (
+                <div className="rounded-md bg-zinc-50 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 p-3 text-xs space-y-1">
+                  <div className="text-zinc-500">Vista previa: {num(viajePreviewM3, 1)} m³ × {num(viajePreviewKm, 1)} km</div>
+                  <div className="flex justify-between"><span>Facturado</span><strong>{money(viajePreviewFacturado)}</strong></div>
+                  <div className="flex justify-between"><span>Cobrado</span><strong>{money(viajePreviewCobrado)}</strong></div>
+                  <div className="flex justify-between"><span>Margen bruto</span><strong>{money(viajePreviewFacturado - viajePreviewCobrado)}</strong></div>
+                </div>
+              ) : null}
+              <div>
+                <Label>Notas</Label>
+                <input
+                  className={inputCls}
+                  value={viajeForm.notas}
+                  onChange={(e) => setViajeForm({ ...viajeForm, notas: e.target.value })}
+                  placeholder="Observaciones..."
+                />
+              </div>
+              <ImageUploadField
+                label="Imagen"
+                value={viajeForm.image_url}
+                onChange={(image_url) => setViajeForm({ ...viajeForm, image_url })}
+                alt="Imagen del viaje"
+              />
+              <button type="submit" className={btnCls}>Guardar viaje</button>
+            </form>
+          )}
+        </Card>
+
+        <Card className="lg:col-span-2">
+          <H2>Viajes</H2>
+          {myRegistros.length === 0 ? (
+            <p className="text-sm text-zinc-500">Sin viajes en el rango.</p>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead className="text-left text-xs uppercase tracking-wide text-zinc-500">
+                  <tr>
+                    <th className="py-2 pr-3">Fecha</th>
+                    <th className="py-2 pr-3">Placa</th>
+                    <th className="py-2 pr-3">Ruta</th>
+                    <th className="py-2 pr-3 text-right">Km</th>
+                    <th className="py-2 pr-3 text-right">Facturado</th>
+                    <th className="py-2 pr-3 text-right">Cobrado</th>
+                    <th className="py-2 pr-3">Imagen</th>
+                    <th className="py-2"></th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-zinc-200 dark:divide-zinc-800">
+                  {myRegistros.map((r) => {
+                    const v = vByPlaca.get(r.placa);
+                    if (editingViajeId === r.id) {
+                      const previewKm = Number(editViaje.km || 0);
+                      const m3eff = r.m3 ?? v?.volumen_m3 ?? 0;
+                      const fact = r.precio_facturado_m3km != null ? m3eff * previewKm * r.precio_facturado_m3km : previewKm * (v?.precio_por_km ?? 0);
+                      const cobr = r.precio_cobrado_m3km != null ? m3eff * previewKm * r.precio_cobrado_m3km : 0;
+                      return (
+                        <tr key={r.id} className="bg-zinc-50 dark:bg-zinc-900/50">
+                          <td className="py-2 pr-3"><input className={inputCls} type="date" value={editViaje.fecha} onChange={(e) => setEditViaje({ ...editViaje, fecha: e.target.value })} /></td>
+                          <td className="py-2 pr-3 font-medium">{r.placa}</td>
+                          <td className="py-2 pr-3"><input className={inputCls} value={editViaje.notas} onChange={(e) => setEditViaje({ ...editViaje, notas: e.target.value })} placeholder={r.ruta_nombre ?? "notas"} /></td>
+                          <td className="py-2 pr-3"><input className={inputCls + " text-right"} type="number" step="0.1" value={editViaje.km} onChange={(e) => setEditViaje({ ...editViaje, km: e.target.value })} /></td>
+                          <td className="py-2 pr-3 text-right text-zinc-500">{money(fact)}</td>
+                          <td className="py-2 pr-3 text-right text-zinc-500">{money(cobr)}</td>
+                          <td className="py-2 pr-3 min-w-40">
+                            <ImageUploadField
+                              label="Imagen"
+                              value={editViaje.image_url}
+                              onChange={(image_url) => setEditViaje({ ...editViaje, image_url })}
+                              alt="Imagen del viaje"
+                            />
+                          </td>
+                          <td className="py-2 text-right whitespace-nowrap">
+                            <button onClick={() => saveEditViaje(r.id)} className="text-xs text-emerald-600 hover:underline mr-2">guardar</button>
+                            <button onClick={() => setEditingViajeId(null)} className="text-xs text-zinc-500 hover:underline">cancelar</button>
+                          </td>
+                        </tr>
+                      );
+                    }
+                    return (
+                      <tr key={r.id}>
+                        <td className="py-2 pr-3 whitespace-nowrap">{r.fecha}</td>
+                        <td className="py-2 pr-3 font-medium">{r.placa}</td>
+                        <td className="py-2 pr-3 text-zinc-500">{r.ruta_nombre ?? (r.consorcio ?? "—")}</td>
+                        <td className="py-2 pr-3 text-right">{num(r.km_recorridos, 1)}</td>
+                        <td className="py-2 pr-3 text-right">{money(facturadoDeRegistro(r, v))}</td>
+                        <td className="py-2 pr-3 text-right">{money(cobradoDeRegistro(r, v))}</td>
+                        <td className="py-2 pr-3">
+                          {r.image_url ? (
+                            <a href={r.image_url} target="_blank" rel="noreferrer" className="block w-fit">
+                              <Image
+                                src={r.image_url}
+                                alt="Imagen del viaje"
+                                width={64}
+                                height={48}
+                                unoptimized
+                                className="h-12 w-16 rounded border border-zinc-200 object-cover dark:border-zinc-800"
+                              />
+                            </a>
+                          ) : (
+                            <span className="text-zinc-400">—</span>
+                          )}
+                        </td>
+                        <td className="py-2 text-right whitespace-nowrap">
+                          <button onClick={() => startEditViaje(r)} className="text-xs text-zinc-600 dark:text-zinc-400 hover:underline mr-2">editar</button>
+                          <button onClick={() => delViaje(r.id)} className="text-xs text-red-600 hover:underline">eliminar</button>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </Card>
+      </section>
 
       <section className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <Card className="lg:col-span-1">
