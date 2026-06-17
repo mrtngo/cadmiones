@@ -1,4 +1,6 @@
-export const MAX_IMAGE_BYTES = 2 * 1024 * 1024;
+import { MAX_IMAGE_BYTES } from "@/lib/image-constants";
+
+export { MAX_IMAGE_BYTES };
 
 export function validateImageFile(file: File) {
   if (!file.type.startsWith("image/")) {
